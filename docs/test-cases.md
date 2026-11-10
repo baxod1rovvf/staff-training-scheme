@@ -99,3 +99,16 @@ Data: lesson L (test.c2, full, decided Approved 7.0) and L2 (test.c1, micro, 1 o
 | 10 | boss_list_people | role teacher | t1, t2, t3 only | t1, t3, t2 (sorted by name) | PASS |
 
 Not covered by a backend run: uploading a real file (file parameters cannot be mocked) — checked in the browser in Task 11.
+## Task 7: Standard versioning and calibration
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | boss_save_draft_criteria | a criterion with empty name | `NAME_REQUIRED` | `NAME_REQUIRED` | PASS |
+| 2 | boss_save_draft_criteria | 10 criteria, #2 renamed | draft v2 created; v1 still active | draft v2 (10 criteria); versions: v1 active, v2 inactive | PASS |
+| 3 | boss_publish_rubric | draft exists | returns version 2; v2 active, v1 inactive | `{version_no: 2}`; v1 false, v2 true (then reverted to v1 by hand) | PASS |
+| 4 | boss_publish_rubric | no draft | `NO_DRAFT` | `NO_DRAFT` | PASS |
+| 5 | boss_save_calibration_lesson | reference missing a criterion | `REFERENCE_INCOMPLETE` | `REFERENCE_INCOMPLETE` | PASS |
+| 6 | teacher_submit_calibration | all bands = reference (5) | accuracy 100 | 100 | PASS |
+| 7 | teacher_submit_calibration | every band off by 2 | accuracy 75 | 75 | PASS |
+| 8 | teacher_submit_calibration | reference all 1, teacher all 9 | accuracy 0 | 0 | PASS |
+| 9 | calibration_overview (boss) | after 6–8 | one row per teacher with their latest attempt | t1 100, t2 75, t3 0 with lesson titles | PASS |

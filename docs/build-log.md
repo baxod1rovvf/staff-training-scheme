@@ -91,3 +91,15 @@ Endpoints:
 Note: a request containing the SQL keyword pair "UNION ALL" was blocked by a network firewall (403) — avoid it in workflow SQL.
 Test helpers deleted.
 
+## Task 7: Standard editor and calibration
+
+Endpoints:
+- `boss_get_standard` `/boss/standard` — `56704e50-3250-4396-82d1-edb9fa05d2fa` → `{ active, draft, versions }`
+- `boss_save_draft_criteria` `/boss/standard/save-draft` — `60aacc31-6005-4203-a8df-95d5478e56a7` (whole list; draft = active + 1, not active)
+- `boss_publish_rubric` `/boss/standard/publish` — `811b4a9f-fd8f-452c-83db-c0aa2c7723f5`
+- `boss_save_calibration_lesson` `/boss/calibration/save` — `56320516-9832-41a1-8aa0-6c659312ab6d`
+- `teacher_submit_calibration` `/teacher/calibration/submit` — `32e93dc4-77c9-4b94-814c-dec978d919af`
+- `calibration_overview` `/calibration/overview` — `09d578c6-199c-437b-a1fb-19977fe97c37` (boss: lessons + teacher accuracy; teacher: active lessons, reference hidden until they have an attempt)
+
+Data kept: calibration lesson "Elementary speaking lesson (sample)" with attempts by t1 (100) and t2 (75).
+
