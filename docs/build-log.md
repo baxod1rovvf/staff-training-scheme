@@ -29,3 +29,27 @@ Table views (authenticated + `mw_active_user`):
 
 Seed user so far: `test.boss` `01a1c661-5205-76bd-9522-296e181c10f8` (login column set in Task 3).
 
+## Task 3: Creator account management
+
+Endpoints (folder Creator/, role `creator`, middleware `mw_active_user`, all POST):
+- `creator_create_user` `/creator/users/create` — `355a3633-b828-473e-a61e-d9f4708f0b47`
+- `creator_update_user` `/creator/users/update` — `e6418873-2fd6-4d45-bd0f-b435f999dd8c` (only sent fields change)
+- `creator_reset_password` `/creator/users/reset-password` — `e1ac72e7-ae0a-4e1c-8887-85b0cc8c9155`
+- `creator_list_users` `/creator/users` — `62ffe72d-b3de-418e-b452-ad21ed869682` (only accounts with one of the 4 roles)
+
+The auth users table is addressed as `auth.users` in table-select. `context.auth.user` carries the custom columns (status checked by the middleware).
+
+Seed accounts (passwords given to the user in chat only):
+
+| login | role | id |
+|---|---|---|
+| creator | creator | `01a1c663-68f7-743c-a9bd-258ac3d8a2c2` |
+| test.boss | boss | `01a1c661-5205-76bd-9522-296e181c10f8` |
+| test.t1 | teacher | `01a1c665-0092-73cc-b30a-922c955ae3c2` |
+| test.t2 | teacher | `01a1c665-1f87-7405-bb71-84ba27e6f062` |
+| test.t3 | teacher | `01a1c665-42e5-7dc2-92aa-155a0e48990d` |
+| test.c1 | candidate (mentor test.t3) | `01a1c665-8b65-72e0-85bc-b95517303bc2` |
+| test.c2 | candidate | `01a1c665-a0cd-736e-944a-55e1ec2329c1` |
+
+The project also has older accounts without any role (from before this project); they can't reach any page or endpoint. Left untouched.
+

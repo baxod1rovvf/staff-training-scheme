@@ -26,3 +26,19 @@ Moved to Task 3 (see ledger ruling): mw_active_user blocked/active cases, accoun
 | 6 | delete trial lesson | lesson with assignment + 2 scores | assignment and scores deleted too | first attempt FAILED (FK without cascade) → fixed links → scores table empty after delete | PASS |
 
 Note: debug fetches do not enforce access rules, so "anonymous is rejected" is checked in the browser in Task 9.
+## Task 3: Creator account management
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | creator_create_user | login `" Ali "`, role teacher | login `ali`, email `ali@users.edunest.local`, status active | login `ali`, email `ali@users.edunest.local`, status `active`, emailVerified true | PASS |
+| 2 | creator_create_user | login `ALI` | error `LOGIN_TAKEN` | `Error: LOGIN_TAKEN` | PASS |
+| 3 | creator_create_user | password `1234567` | error `PASSWORD_TOO_SHORT` | `Code evaluation error: PASSWORD_TOO_SHORT` | PASS |
+| 4 | creator_create_user | role `admin` | error `INVALID_ROLE` | `Code evaluation error: INVALID_ROLE` | PASS |
+| 5 | creator_create_user | role candidate (test.c1, mentor test.t3) | `stage = shadowing`, mentor set | stage `shadowing`, mentor_id = test.t3 | PASS |
+| 6 | creator_update_user | creator blocks self | error `CANNOT_BLOCK_SELF` | `Code evaluation error: CANNOT_BLOCK_SELF` | PASS |
+| 7 | creator_update_user | ali login → `Test.Boss` | error `LOGIN_TAKEN` | `Code evaluation error: LOGIN_TAKEN` | PASS |
+| 8 | creator_update_user | ali status blocked | status `blocked`, other fields untouched | status `blocked`; name/login/roles unchanged | PASS |
+| 9 | mw_active_user | as blocked ali | 403 `BLOCKED` | response 403 `{error:"BLOCKED"}` | PASS |
+| 10 | mw_active_user | as active test.boss | passes, no response sent | condition false, no response | PASS |
+| 11 | creator_reset_password | ali, `newpass123` | `{ ok: true }` | "Password updated successfully", body `{ok:true}` | PASS |
+| 12 | creator_list_users | search `ali`; role teacher + active | ali only, no password field; t1–t3 only | ali row without password; t3, t2, t1 | PASS |
