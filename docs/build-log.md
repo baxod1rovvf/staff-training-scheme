@@ -53,3 +53,14 @@ Seed accounts (passwords given to the user in chat only):
 
 The project also has older accounts without any role (from before this project); they can't reach any page or endpoint. Left untouched.
 
+## Task 4: Lesson scheduling and Telegram
+
+Env variables: `TELEGRAM_BOT_TOKEN` (secure, empty until the user creates a bot), `EDUNEST_APP_URL` (public, optional; when empty the WeWeb built-in `APP_URL` is used — it arrives as a JSON list, first entry taken).
+
+Endpoints (folder Boss/, role `boss`, middleware `mw_active_user`, POST):
+- `boss_schedule_lesson` `/boss/lessons/schedule` — `a92ff3c8-61c6-4b92-a578-d164c6e5c0c9` → `{ lesson_id, telegram_failed }`
+- `boss_add_observer` `/boss/lessons/add-observer` — `c039ae79-29b4-4407-a171-b39e01d32c9e` → `{ assignment_id, telegram_sent }`
+- `boss_reopen_score` `/boss/lessons/reopen-score` — `d0259353-c38d-4453-98ec-3fdbc774be78` (keeps scores, recomputes lesson status)
+
+Telegram: `sendMessage` via HTTP request with `throw: false`; delivery stored in `observer_assignments.telegram_sent`. Messages are skipped silently when the token or the teacher's chat id is empty.
+

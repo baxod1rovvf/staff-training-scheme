@@ -42,3 +42,17 @@ Note: debug fetches do not enforce access rules, so "anonymous is rejected" is c
 | 10 | mw_active_user | as active test.boss | passes, no response sent | condition false, no response | PASS |
 | 11 | creator_reset_password | ali, `newpass123` | `{ ok: true }` | "Password updated successfully", body `{ok:true}` | PASS |
 | 12 | creator_list_users | search `ali`; role teacher + active | ali only, no password field; t1–t3 only | ali row without password; t3, t2, t1 | PASS |
+## Task 4: Lesson scheduling and Telegram
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | boss_schedule_lesson | 1 observer | error `OBSERVERS_COUNT` | `Code evaluation error: OBSERVERS_COUNT` | PASS |
+| 2 | boss_schedule_lesson | test.c1 with observers t1 + t3 (t3 = c1's mentor) | error `MENTOR_AS_OBSERVER` | `Code evaluation error: MENTOR_AS_OBSERVER` | PASS |
+| 3 | boss_schedule_lesson | candidate = test.t1 | error `NOT_A_CANDIDATE` | `Code evaluation error: NOT_A_CANDIDATE` | PASS |
+| 4 | boss_schedule_lesson | observer = test.c2 | error `NOT_A_TEACHER` | `Code evaluation error: NOT_A_TEACHER` | PASS |
+| 5 | boss_schedule_lesson | test.c1, t1 + t2, no chat ids, no bot token | lesson created (status scheduled, active version); `telegram_failed` = [t1, t2] | lesson `scheduled`, version v1, 2 assignments, `telegram_failed` = [t1, t2] | PASS |
+| 6 | boss_add_observer | same lesson, t1 again | error `ALREADY_OBSERVER` | `Code evaluation error: ALREADY_OBSERVER` | PASS |
+| 7 | boss_add_observer | same lesson, t3 (mentor) | error `MENTOR_AS_OBSERVER` | `Code evaluation error: MENTOR_AS_OBSERVER` | PASS |
+| 8 | boss_reopen_score | t1's assignment, both submitted, lesson awaiting_decision | t1 `submitted_at` null; lesson back to `scheduled` | unlocked; 1 submitted left; lesson `scheduled` | PASS |
+| 9 | boss_reopen_score | lesson already approved | error `ALREADY_DECIDED` | `Code evaluation error: ALREADY_DECIDED` | PASS |
+| 10 | Telegram text | no EDUNEST_APP_URL set | link uses the first app address | first run FAILED (printed the raw list `["https://…","https://…"]/teacher`) → parse fix → `Open: https://directional-calculus-editor.weweb.io/teacher` | PASS |
