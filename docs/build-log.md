@@ -64,3 +64,16 @@ Endpoints (folder Boss/, role `boss`, middleware `mw_active_user`, POST):
 
 Telegram: `sendMessage` via HTTP request with `throw: false`; delivery stored in `observer_assignments.telegram_sent`. Messages are skipped silently when the token or the teacher's chat id is empty.
 
+## Task 5: Scoring, result and decision
+
+Endpoints:
+- `boss_get_lesson` `/boss/lessons/get` — `27842599-1bd1-4fcb-b8e4-00f36143a157` (boss) → `{ lesson, candidate, observers[{…, scores}], result, decision }`
+- `boss_decide` `/boss/lessons/decide` — `cdc590f8-ba9e-4c08-8dcb-3db86f7e7914` (boss)
+- `teacher_get_scoring_form` `/teacher/scoring-form` — `bcdc27a1-a5e6-48f1-8ea8-4a16e003b1d2` (teacher, own assignment only)
+- `teacher_submit_scores` `/teacher/submit-scores` — `20bb3fbd-60a1-412b-b7a1-2eef52dca36c` (teacher)
+
+Rules block ("Edunest Lesson Standard rules") is the same JS in `boss_get_lesson` and `boss_decide`. Per-criterion bands come from one grouped SQL query (submitted observers only).
+Double-submit protection: the submit first sets `submitted_at` only where it is still empty; if nothing was updated → `ALREADY_SUBMITTED`. If saving the bands fails, `submitted_at` is cleared again (`SAVE_FAILED`).
+
+Test helpers (folder Tests/, deleted after Task 6): `tmp_test_set_bands` `176a3d50-3a81-4940-acf9-8d26a432bdca`, `tmp_test_result_summary` `39791eb5-f515-46ad-b2d9-54ca71e669fe`.
+

@@ -70,14 +70,14 @@ Setup: lesson L (test.c2, full, v1) with observers t1 + t2 (both submitted) unle
 | 6 | rules (same code) | overall 6.5, Clear lesson aim 3.5 | `not_ready`, none_below_4 false | overall 6.5, none_below_4 false, not_ready | PASS |
 | 7 | boss_get_lesson / rules | criterion bands 4 and 7 / 5 and 7 | disagreement true / false | 4/7 → `disagreements: [Rapport and atmosphere]`; 5/7 → none | PASS |
 | 8 | rules after boss_reopen_score(t2) | one observer not submitted | that observer's bands not counted | single bands per criterion, submitted_count 1 | PASS |
-| 9 | teacher_submit_scores | second submit by t1 | `ALREADY_SUBMITTED`, score count unchanged | — | TODO |
-| 10 | teacher_submit_scores | 9 of 10 criteria | `INCOMPLETE_SCORES` | — | TODO |
-| 11 | teacher_submit_scores | band 10 | `INVALID_BAND` | — | TODO |
-| 12 | teacher_submit_scores | t2 submits t1's assignment | `NOT_YOUR_ASSIGNMENT` | — | TODO |
-| 13 | teacher_submit_scores | valid, 2nd observer | lesson becomes `awaiting_decision` | — | TODO |
-| 14 | boss_decide | only 1 submitted | `NOT_ENOUGH_SCORES` | — | TODO |
-| 15 | boss_decide | decline a `ready` lesson, empty note | `NOTE_REQUIRED` | — | TODO |
-| 16 | boss_decide | approve full lesson (ready) | decision stored; lesson `approved`; candidate stage `probation` | — | TODO |
-| 17 | boss_decide | decide again | `ALREADY_DECIDED` | — | TODO |
-| 18 | teacher_get_scoring_form | lesson on v1 after v2 published (rename criterion 2) | still returns v1 name `Clear lesson aim` | — | TODO |
-| 19 | teacher_submit_scores | resubmit after boss reopened | new bands replace old ones, no duplicates | — | TODO |
+| 9 | teacher_submit_scores | second submit by t1 | `ALREADY_SUBMITTED`, score count unchanged | `ALREADY_SUBMITTED`; still exactly 2 bands per criterion | PASS |
+| 10 | teacher_submit_scores | 9 of 10 criteria | `INCOMPLETE_SCORES` | `INCOMPLETE_SCORES` | PASS |
+| 11 | teacher_submit_scores | band 10 | `INVALID_BAND` | `INVALID_BAND` | PASS |
+| 12 | teacher_submit_scores | t1 submits t2's assignment | `NOT_YOUR_ASSIGNMENT` | `NOT_YOUR_ASSIGNMENT` | PASS |
+| 13 | teacher_submit_scores | valid, 2nd observer | lesson becomes `awaiting_decision` | `{ok:true, submitted_count:2}`, lesson `awaiting_decision` | PASS |
+| 14 | boss_decide | only 1 submitted | `NOT_ENOUGH_SCORES` | `NOT_ENOUGH_SCORES` | PASS |
+| 15 | boss_decide | decline a `ready` lesson, note of spaces | `NOTE_REQUIRED` | `NOTE_REQUIRED` | PASS |
+| 16 | boss_decide | approve full lesson (ready) | decision stored; lesson `approved`; candidate stage `probation` | decision (ready, 7.0); lesson approved; test.c2 stage `probation` | PASS |
+| 17 | boss_decide | decide again | `ALREADY_DECIDED` | `ALREADY_DECIDED` | PASS |
+| 18 | teacher_get_scoring_form | lesson on v1 after v2 activated (criterion 2 renamed) | still returns v1 name `Clear lesson aim` | 10 v1 criteria incl. `Clear lesson aim`; v2 removed again | PASS |
+| 19 | teacher_submit_scores | resubmit after boss reopened | new bands replace old ones, no duplicates | t2's 7/4/… replaced by 8s; 2 bands per criterion | PASS |
