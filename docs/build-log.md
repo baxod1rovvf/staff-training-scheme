@@ -77,3 +77,17 @@ Double-submit protection: the submit first sets `submitted_at` only where it is 
 
 Test helpers (folder Tests/, deleted after Task 6): `tmp_test_set_bands` `176a3d50-3a81-4940-acf9-8d26a432bdca`, `tmp_test_result_summary` `39791eb5-f515-46ad-b2d9-54ca71e669fe`.
 
+## Task 6: Candidate data, journal, materials
+
+Endpoints:
+- `candidate_my_results` `/candidate/results` — `78fba6bf-7dd9-49b0-9ab4-e32da7fec62e` (candidate)
+- `candidate_add_journal` `/candidate/journal/add` — `693aa9d6-0df2-4fa8-b3ce-ee5cc2458d82` (candidate)
+- `journal_list` `/journal/list` — `ceb5cec8-17d0-4541-9ccd-3660fe02ef92` (boss any, teacher own mentees, candidate own)
+- `boss_save_material` `/boss/materials/save` — `b0929667-b8fe-4c33-a6d1-341932b6672b` (file → public storage `materials/…`)
+- `boss_delete_material` `/boss/materials/delete` — `0d83f182-8591-4462-a97c-ae2b929a3f5a`
+- `boss_update_candidate` `/boss/candidates/update` — `074158f5-e017-4671-a11b-decd5923fdbe`
+- `boss_list_people` `/boss/people` — `62ec9b94-c06d-4598-b6fa-ad4ebf6b4409`
+
+Note: a request containing the SQL keyword pair "UNION ALL" was blocked by a network firewall (403) — avoid it in workflow SQL.
+Test helpers deleted.
+

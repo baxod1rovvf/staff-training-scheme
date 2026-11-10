@@ -81,3 +81,21 @@ Setup: lesson L (test.c2, full, v1) with observers t1 + t2 (both submitted) unle
 | 17 | boss_decide | decide again | `ALREADY_DECIDED` | `ALREADY_DECIDED` | PASS |
 | 18 | teacher_get_scoring_form | lesson on v1 after v2 activated (criterion 2 renamed) | still returns v1 name `Clear lesson aim` | 10 v1 criteria incl. `Clear lesson aim`; v2 removed again | PASS |
 | 19 | teacher_submit_scores | resubmit after boss reopened | new bands replace old ones, no duplicates | t2's 7/4/… replaced by 8s; 2 bands per criterion | PASS |
+## Task 6: Candidate results, journal, materials
+
+Data: lesson L (test.c2, full, decided Approved 7.0) and L2 (test.c1, micro, 1 of 2 submitted).
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | candidate_my_results | as test.c1 | L2 `Waiting`, no overall / criteria / comments | one lesson, status `Waiting`, only basic fields | PASS |
+| 2 | candidate_my_results | as test.c2 | L `Approved`, overall 7, 10 criterion bands, comments, boss note; no observer ids or names | Approved, overall 7, 10 bands (7.5…6.5), comments "Confident, good pace." + Preparation "Clear plan", boss note; no ids/names | PASS |
+| 3 | candidate_my_results | c1 vs c2 | neither sees the other's lesson | c1 only L2, c2 only L | PASS |
+| 4 | candidate_add_journal | missing techniques | `JOURNAL_FIELDS_REQUIRED` | `JOURNAL_FIELDS_REQUIRED` | PASS |
+| 5 | candidate_add_journal | valid, as c1 | entry created for c1 | entry `01a1c67f-688e…` with candidate c1 | PASS |
+| 6 | journal_list | c1's journal as t3 (mentor) / t1 / boss / c2 | t3 ✓, t1 `NOT_YOUR_MENTEE`, boss ✓, c2 sees only own (empty) | t3 1 entry, t1 `NOT_YOUR_MENTEE`, boss 1 entry, c2 `[]` | PASS |
+| 7 | boss_save_material | no file, no link | `FILE_OR_LINK_REQUIRED` | `FILE_OR_LINK_REQUIRED` | PASS |
+| 8 | boss_save_material | link, type exercises | saved; tv_materials(type=exercises) returns it | saved; view returns 1 row "Past simple drills" | PASS |
+| 9 | boss_update_candidate | stage `flying` / mentor = c2 / stage micro_teaching | `INVALID_STAGE` / `NOT_A_TEACHER` / saved | as expected; c1 stage `micro_teaching`, mentor unchanged | PASS |
+| 10 | boss_list_people | role teacher | t1, t2, t3 only | t1, t3, t2 (sorted by name) | PASS |
+
+Not covered by a backend run: uploading a real file (file parameters cannot be mocked) — checked in the browser in Task 11.
