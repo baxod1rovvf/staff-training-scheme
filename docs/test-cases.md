@@ -56,3 +56,28 @@ Note: debug fetches do not enforce access rules, so "anonymous is rejected" is c
 | 8 | boss_reopen_score | t1's assignment, both submitted, lesson awaiting_decision | t1 `submitted_at` null; lesson back to `scheduled` | unlocked; 1 submitted left; lesson `scheduled` | PASS |
 | 9 | boss_reopen_score | lesson already approved | error `ALREADY_DECIDED` | `Code evaluation error: ALREADY_DECIDED` | PASS |
 | 10 | Telegram text | no EDUNEST_APP_URL set | link uses the first app address | first run FAILED (printed the raw list `["https://…","https://…"]/teacher`) → parse fix → `Open: https://directional-calculus-editor.weweb.io/teacher` | PASS |
+## Task 5: Scoring, result and decision
+
+Setup: lesson L (test.c2, full, v1) with observers t1 + t2 (both submitted) unless stated. Bands listed per criterion 1–10 as t1 / t2.
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | boss_get_lesson | criterion averages sum 62.0 | overall **6.0** | overall 6, overall_raw 6.2, ready | PASS |
+| 2 | boss_get_lesson | sum 62.5 | overall **6.5** | — | TODO |
+| 3 | boss_get_lesson | sum 67.0 | overall **6.5** | — | TODO |
+| 4 | boss_get_lesson | sum 67.5 | overall **7.0** | — | TODO |
+| 5 | boss_get_lesson | overall 7.0, Preparation 5.5 | `not_ready`, must_pass_ok false | — | TODO |
+| 6 | boss_get_lesson | overall 6.5, Clear lesson aim 3.5 | `not_ready`, none_below_4 false | — | TODO |
+| 7 | boss_get_lesson | criterion bands 4 and 7 / 5 and 7 | disagreement true / false | — | TODO |
+| 8 | boss_get_lesson | one observer not submitted | that observer's bands not counted | — | TODO |
+| 9 | teacher_submit_scores | second submit by t1 | `ALREADY_SUBMITTED`, score count unchanged | — | TODO |
+| 10 | teacher_submit_scores | 9 of 10 criteria | `INCOMPLETE_SCORES` | — | TODO |
+| 11 | teacher_submit_scores | band 10 | `INVALID_BAND` | — | TODO |
+| 12 | teacher_submit_scores | t2 submits t1's assignment | `NOT_YOUR_ASSIGNMENT` | — | TODO |
+| 13 | teacher_submit_scores | valid, 2nd observer | lesson becomes `awaiting_decision` | — | TODO |
+| 14 | boss_decide | only 1 submitted | `NOT_ENOUGH_SCORES` | — | TODO |
+| 15 | boss_decide | decline a `ready` lesson, empty note | `NOTE_REQUIRED` | — | TODO |
+| 16 | boss_decide | approve full lesson (ready) | decision stored; lesson `approved`; candidate stage `probation` | — | TODO |
+| 17 | boss_decide | decide again | `ALREADY_DECIDED` | — | TODO |
+| 18 | teacher_get_scoring_form | lesson on v1 after v2 published (rename criterion 2) | still returns v1 name `Clear lesson aim` | — | TODO |
+| 19 | teacher_submit_scores | resubmit after boss reopened | new bands replace old ones, no duplicates | — | TODO |
