@@ -63,13 +63,13 @@ Setup: lesson L (test.c2, full, v1) with observers t1 + t2 (both submitted) unle
 | # | Workflow / check | Input | Expected | Actual | Result |
 |---|---|---|---|---|---|
 | 1 | boss_get_lesson | criterion averages sum 62.0 | overall **6.0** | overall 6, overall_raw 6.2, ready | PASS |
-| 2 | boss_get_lesson | sum 62.5 | overall **6.5** | — | TODO |
-| 3 | boss_get_lesson | sum 67.0 | overall **6.5** | — | TODO |
-| 4 | boss_get_lesson | sum 67.5 | overall **7.0** | — | TODO |
-| 5 | boss_get_lesson | overall 7.0, Preparation 5.5 | `not_ready`, must_pass_ok false | — | TODO |
-| 6 | boss_get_lesson | overall 6.5, Clear lesson aim 3.5 | `not_ready`, none_below_4 false | — | TODO |
-| 7 | boss_get_lesson | criterion bands 4 and 7 / 5 and 7 | disagreement true / false | — | TODO |
-| 8 | boss_get_lesson | one observer not submitted | that observer's bands not counted | — | TODO |
+| 2 | boss_get_lesson | sum 62.5 (incl. criterion 6 = 4/7) | overall **6.5** | overall 6.5, raw 6.25, ready | PASS |
+| 3 | rules (tmp_test_result_summary, same code) | sum 67.0 | overall **6.5** | overall 6.5, raw 6.7 | PASS |
+| 4 | rules (same code) | sum 67.5 | overall **7.0** | overall 7, raw 6.75 | PASS |
+| 5 | rules (same code) | overall 7.0, Preparation 5.5 | `not_ready`, must_pass_ok false | overall 7, must_pass_ok false, not_ready | PASS |
+| 6 | rules (same code) | overall 6.5, Clear lesson aim 3.5 | `not_ready`, none_below_4 false | overall 6.5, none_below_4 false, not_ready | PASS |
+| 7 | boss_get_lesson / rules | criterion bands 4 and 7 / 5 and 7 | disagreement true / false | 4/7 → `disagreements: [Rapport and atmosphere]`; 5/7 → none | PASS |
+| 8 | rules after boss_reopen_score(t2) | one observer not submitted | that observer's bands not counted | single bands per criterion, submitted_count 1 | PASS |
 | 9 | teacher_submit_scores | second submit by t1 | `ALREADY_SUBMITTED`, score count unchanged | — | TODO |
 | 10 | teacher_submit_scores | 9 of 10 criteria | `INCOMPLETE_SCORES` | — | TODO |
 | 11 | teacher_submit_scores | band 10 | `INVALID_BAND` | — | TODO |
