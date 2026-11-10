@@ -14,3 +14,15 @@ Each case is run against the WeWeb **editor** environment (runBackendWorkflow, f
 | 5 | listInstalledAuth | — | PROVIDER_EMAIL_DISABLE_SIGNUP = TRUE | TRUE (editor, staging, production) | PASS |
 
 Moved to Task 3 (see ledger ruling): mw_active_user blocked/active cases, account seeding.
+## Task 2: Data model and seeded standard
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | tv_active_criteria | as test.boss | 10 rows, first `Preparation`, last `Edunest systems` | 10 rows; Preparation … Edunest systems | PASS |
+| 2 | tv_active_criteria | as test.boss | exactly 4 rows with `must_pass = true` | Preparation, Clear instructions, Accurate English model, Classroom management and pace | PASS |
+| 3 | scores insert | band 10 | rejected by check constraint | `violates check constraint "scores_band_1_9"` | PASS |
+| 4 | scores insert | same (assignment, criterion) twice | second rejected; other criterion allowed | `violates unique constraint "scores_one_per_criterion"`; different criterion inserted | PASS |
+| 5 | observer_assignments insert | same (lesson, observer) twice | second rejected | `violates unique constraint "assignments_unique_observer"` | PASS |
+| 6 | delete trial lesson | lesson with assignment + 2 scores | assignment and scores deleted too | first attempt FAILED (FK without cascade) → fixed links → scores table empty after delete | PASS |
+
+Note: debug fetches do not enforce access rules, so "anonymous is rejected" is checked in the browser in Task 9.
