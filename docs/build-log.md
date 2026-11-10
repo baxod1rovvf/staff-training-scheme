@@ -103,3 +103,7 @@ Endpoints:
 
 Data kept: calibration lesson "Elementary speaking lesson (sample)" with attempts by t1 (100) and t2 (75).
 
+## Task 8: Scoring reminders
+
+Scheduled Tasks are not in the current WeWeb plan (`JOBS_PLAN_REQUIRED`). Built `boss_send_reminders` `/boss/reminders/send` — `4fce8c44-b0fd-4117-be16-12344e8fb6e4` (boss) instead, used by a "Send reminders" button on the boss dashboard. When the plan is upgraded, the same steps can run as a daily Scheduled Task at 09:00 Asia/Tashkent.
+

@@ -112,3 +112,11 @@ Not covered by a backend run: uploading a real file (file parameters cannot be m
 | 7 | teacher_submit_calibration | every band off by 2 | accuracy 75 | 75 | PASS |
 | 8 | teacher_submit_calibration | reference all 1, teacher all 9 | accuracy 0 | 0 | PASS |
 | 9 | calibration_overview (boss) | after 6–8 | one row per teacher with their latest attempt | t1 100, t2 75, t3 0 with lesson titles | PASS |
+## Task 8: Scoring reminders
+
+WeWeb Scheduled Tasks need a paid plan (`JOBS_PLAN_REQUIRED`), so reminders are sent by the boss with one button (`boss_send_reminders`).
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | getJobsConfiguration | editor | Scheduled Tasks available | `JOBS_PLAN_REQUIRED` → ruling: manual reminders | PASS |
+| 2 | boss_send_reminders | L2 (t1 submitted, t2 not, 1+ day ago), L decided | overdue list = [t2 on L2] only; `sent: false` (no bot token) | 1 row: Test Teacher Two / Test Candidate One, sent false, telegram_configured false | PASS |
