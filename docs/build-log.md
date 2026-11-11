@@ -195,3 +195,4 @@ Calibration page: section "Boss Calibration" `da18abb5-0a14-4bea-bf36-28028a3068
 
 Decision page: section "Boss Lesson Decision" `5282ea85-5678-4c16-bfe4-1816fc21e04c`; variable dLesson `bbddc826-37d1-4d15-b104-083ab81eb452`. Function "Boss: load lesson" `c0a1b2c3-0220-…`; onload `0221`; outcome `0222`; ask/cancel/backdrop/confirm decision `0223…0226`; add observer open/pick/close×3/confirm `0227…0232`; reopen scores `0233`. Shared "Hide toast later" `c0a1b2c3-0099-…`.
 - The decision needs a confirmation dialog because it cannot be changed; the page checks the 2-observer rule and the override note before the dialog opens (the endpoint checks them again).
+Report page: section "Report" `3ed12d6b-ec29-4182-af15-c196b3465532` (no sidebar, max 760 px wide); onload `c0a1b2c3-0240-…` reuses "Boss: load lesson"; Print `0241` runs `window.print()` (custom JS: WeWeb has no print action). The Print button also prints; hide it in the print dialog's "headers" or ignore.
