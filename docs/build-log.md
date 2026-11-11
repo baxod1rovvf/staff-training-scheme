@@ -167,7 +167,7 @@ Decisions:
 - Double submit: Save and Confirm start with "already saving?" and the loader flag is reset in the trycatch `finally`.
 - Design patterns (chips, table, slide-over, dialog, toast) appended to the WeWeb design guidelines.
 
-## Task 11: Boss pages (in progress)
+## Task 11: Boss pages
 
 New endpoint `boss_list_lessons` `/boss/lessons` — `5c66db83-83e8-4962-a9f7-cb0b5aa721ed` (boss): lessons newest first, optional `candidate_id`, with candidate_name, observers_total/submitted, has_disagreement (any criterion spread >= 3 among submitted observers) and decision. One SQL query (counts + grouped check).
 Variables (folder Boss): bLessons `77240e75-0ee6-4a89-b85f-0060cd8a6658`, bCandidates `901ee58a-bded-47c9-9c95-10bc8bd70d7b`, bTeachers `8b74c25f-e68e-4729-850e-99424e6a73d9`, bLoading `63987228-6b6e-4827-a2e7-7371cb6adc9b`, bBusy `72a03139-5927-4d89-9351-24496c7491fa`, bToast `9f64485d-823d-43dc-99e2-ac3750675de1`.
@@ -188,3 +188,5 @@ Materials page: section "Boss Materials" `0acfbdbf-133c-4463-b56b-6041851e5575`;
 - Filter chips are repeats with one click workflow each instead of one workflow per chip.
 - File URLs come from `wwFormulas.getStorageUrl(file_path, 'public')` (never built from the path by hand).
 - The save calls the endpoint with the file only when one is chosen (`if` with two calls); without a file it sends `file: ""`, which the endpoint treats as "keep the current file".
+Calibration page: section "Boss Calibration" `da18abb5-0a14-4bea-bf36-28028a30689f`; variable cCal `4579ec51-7eae-4765-b880-49c87032cbcd`. Function "Boss: load calibration" `c0a1b2c3-0200-…` (calibration_overview + boss_get_standard); onload `0201`; add/edit `0202/0203`; visibility `0204`; band chip `0205` (nested repeat items carry the criterion id); close `0206…0208`; save `0209`.
+- Reference bands are a 1–9 chip row per criterion, so the boss never types numbers; the save names any criterion still missing a band.
