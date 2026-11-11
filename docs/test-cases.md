@@ -147,3 +147,15 @@ Backend regression for the change made in this task (empty fields = "not changed
 | 4 | Create account | new login | slide-over closes, toast "Account created for …", row appears | waiting for browser run | DEFERRED (user skipped browser run; test on live site later) |
 | 5 | Create account | login already used | "This login is already taken." in the slide-over | backend returns LOGIN_TAKEN (Task 3 #2); UI waiting for browser run | DEFERRED (user skipped browser run; test on live site later) |
 | 6 | Block | Block on a row → confirm | badge turns Blocked; that user's sign-in is refused | backend + middleware verified in Tasks 3/1; UI waiting for browser run | DEFERRED (user skipped browser run; test on live site later) |
+
+## Task 11: Boss pages
+
+New endpoint `boss_list_lessons` (runBackendWorkflow as `test.boss`):
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | boss_list_lessons | candidate_id empty | both test lessons, newest first, counts as numbers | L2 (scheduled, 1/2 submitted) then L (approved, 2/2, decision 7.0) | PASS |
+| 2 | boss_list_lessons | lesson L (bands differ by 3 on a criterion) | has_disagreement true | true | PASS |
+| 3 | boss_list_lessons | candidate_id = test.c1 | only test.c1's lesson | only L2 | PASS |
+| 4 | boss_send_reminders | no Telegram token | overdue list returned, nothing sent, telegram_configured false | 1 overdue (Test Teacher Two), sent false, telegram_configured false | PASS |
+| 5 | Dashboard page | open `/boss` | 4 stat cards, decision / upcoming / recent lists, teacher accuracy | page built with load workflow (editor data); browser run waiting | DEFERRED (user skipped browser run; test on live site later) |

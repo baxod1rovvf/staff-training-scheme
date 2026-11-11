@@ -166,3 +166,9 @@ Decisions:
 - WeWeb requires every endpoint parameter to be sent, so `creator_update_user` now treats empty full_name/login/role/status/stage as "not changed" (empty telegram_chat_id / mentor_id still clear). The block action sends the account's current Telegram id and mentor so they are kept.
 - Double submit: Save and Confirm start with "already saving?" and the loader flag is reset in the trycatch `finally`.
 - Design patterns (chips, table, slide-over, dialog, toast) appended to the WeWeb design guidelines.
+
+## Task 11: Boss pages (in progress)
+
+New endpoint `boss_list_lessons` `/boss/lessons` — `5c66db83-83e8-4962-a9f7-cb0b5aa721ed` (boss): lessons newest first, optional `candidate_id`, with candidate_name, observers_total/submitted, has_disagreement (any criterion spread >= 3 among submitted observers) and decision. One SQL query (counts + grouped check).
+Variables (folder Boss): bLessons `77240e75-0ee6-4a89-b85f-0060cd8a6658`, bCandidates `901ee58a-bded-47c9-9c95-10bc8bd70d7b`, bTeachers `8b74c25f-e68e-4729-850e-99424e6a73d9`, bLoading `63987228-6b6e-4827-a2e7-7371cb6adc9b`, bBusy `72a03139-5927-4d89-9351-24496c7491fa`, bToast `9f64485d-823d-43dc-99e2-ac3750675de1`.
+Dashboard: section "Boss Dashboard" `ef9155e6-3488-4fe7-81f6-105e73af536c`; page onload "Boss: load dashboard" `c0a1b2c3-0101-…`; "Send reminders" `c0a1b2c3-0102-…` (message explains when the Telegram bot is not set up).
