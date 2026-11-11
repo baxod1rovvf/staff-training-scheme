@@ -138,3 +138,19 @@ Pages:
 | Candidate · Journal | candidate/journal | 8d499a16-0fd7-40bc-a0b6-f6777f03d68e |
 | Signup / Forgot password (old) | — | f7e55307-a820-4748-82f0-e00aa3246bbd / a31d97b7-2106-46d9-9c83-2032ae3cad69 → emptied, draft |
 
+
+### Task 9 (continued): shell
+
+| Item | Id |
+|---|---|
+| App Sidebar (shared section, reused on 17 pages, not on the print report) | 85909faf-5156-4061-9857-c41c5af2bb21 |
+| Sign Out Button (click → signout → `login`) | element 5570fab4-dd44-4263-bee5-9c6438748250, workflow 5e1f0a77-2b3c-4d5e-8f90-a1b2c3d4e5f6 |
+| Page onload guards "Guard: <role>" (call Guard page) | 6a7b8c9d-00NN-… one per role page (18) |
+| Start page (home, onload "Route by role") | f86ed6ed-4b66-482d-a6c9-5e6dd3cdf707 |
+
+Decisions:
+- The old Loom "Home" page belongs to an earlier project in the same WeWeb workspace, so it was set to draft instead of being emptied. A new "Start" page is the home page and redirects by role.
+- Signup and Forgot password are drafts (accounts and password resets come from the creator only).
+- Content sections on role pages use `margin-left: 248px` on desktop and `0` on tablet/mobile so they clear the fixed sidebar (applied as each page is built in Tasks 10–14).
+- Nav labels are grey (`ed-sidebar-text`); the active item is marked by the `nav_a` background. Hover/active white text would need the parent-state ids that WeWeb regenerates on insert, so it was left out.
+- Browser checks wait for the first publish: the live site is still v1 (2026-11-07) and publishing can only be done from the WeWeb editor.
