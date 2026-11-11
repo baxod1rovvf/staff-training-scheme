@@ -190,3 +190,8 @@ Materials page: section "Boss Materials" `0acfbdbf-133c-4463-b56b-6041851e5575`;
 - The save calls the endpoint with the file only when one is chosen (`if` with two calls); without a file it sends `file: ""`, which the endpoint treats as "keep the current file".
 Calibration page: section "Boss Calibration" `da18abb5-0a14-4bea-bf36-28028a30689f`; variable cCal `4579ec51-7eae-4765-b880-49c87032cbcd`. Function "Boss: load calibration" `c0a1b2c3-0200-…` (calibration_overview + boss_get_standard); onload `0201`; add/edit `0202/0203`; visibility `0204`; band chip `0205` (nested repeat items carry the criterion id); close `0206…0208`; save `0209`.
 - Reference bands are a 1–9 chip row per criterion, so the boss never types numbers; the save names any criterion still missing a band.
+
+## Task 12: Lesson decision and report
+
+Decision page: section "Boss Lesson Decision" `5282ea85-5678-4c16-bfe4-1816fc21e04c`; variable dLesson `bbddc826-37d1-4d15-b104-083ab81eb452`. Function "Boss: load lesson" `c0a1b2c3-0220-…`; onload `0221`; outcome `0222`; ask/cancel/backdrop/confirm decision `0223…0226`; add observer open/pick/close×3/confirm `0227…0232`; reopen scores `0233`. Shared "Hide toast later" `c0a1b2c3-0099-…`.
+- The decision needs a confirmation dialog because it cannot be changed; the page checks the 2-observer rule and the override note before the dialog opens (the endpoint checks them again).

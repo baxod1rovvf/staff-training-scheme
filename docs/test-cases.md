@@ -167,3 +167,11 @@ New endpoint `boss_list_lessons` (runBackendWorkflow as `test.boss`):
 | 11 | boss_delete_material | id of row 10 | row removed | `{ok: true}` | PASS |
 | 12 | Materials page | open `/boss/materials`; filter Slides + Elementary; add with a PDF; edit title only; delete | list narrows; upload shows File button that opens the file; edit keeps the file; delete asks first | page + 16 workflows built (editor data); browser run waiting (file upload cannot be mocked) | DEFERRED (user skipped browser run; test on live site later) |
 | 13 | Calibration page | open `/boss/calibration`; add a lesson leaving one band empty, then complete it; edit and hide it | accuracy table (Teacher One 100%, Two 75%, Three "Not yet"); missing band named in the error; saved lesson listed; hidden badge shown | page + 10 workflows built (editor data); backend covered by Task 7 rows 5–9; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
+
+## Task 12: Lesson decision and report
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | boss_get_lesson (data for the page) | lesson L (approved, 2 observers) | result overall 7, raw 7.2, ready, disagreements [Clear lesson aim, Edunest systems], decision approved 7 | exactly that | PASS |
+| 2 | Decision page | open L2 (1 of 2 submitted), pick Approve, Decide | blocked: "At least 2 observers must submit…" | page + 15 workflows built (editor data); browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
+| 3 | Decision page | not-ready lesson, Approve without note | "Please write a note…" before the dialog opens | built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
