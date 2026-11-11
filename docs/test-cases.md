@@ -176,3 +176,14 @@ New endpoint `boss_list_lessons` (runBackendWorkflow as `test.boss`):
 | 2 | Decision page | open L2 (1 of 2 submitted), pick Approve, Decide | blocked: "At least 2 observers must submit…" | page + 15 workflows built (editor data); browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
 | 3 | Decision page | not-ready lesson, Approve without note | "Please write a note…" before the dialog opens | built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
 | 4 | Report page | open `/boss/report/<L>` and click Print | A4 preview: header, info, result, 10-row table, comments, decision, signatures | page + 2 workflows built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
+
+## Task 13: Teacher pages
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | teacher_my_work | as t1 | t1's assignments with candidate name and decided flag; mentees with journal count | 2 assignments, mentees list | PASS |
+| 2 | teacher_get_scoring_form (data for the page) | t1, submitted assignment on L | 10 criteria, my 10 bands, `locked: true`, candidate "Test Candidate Two" | exactly that | PASS |
+| 3 | calibration_overview (teacher) | as t1 | sample lesson with 10 criteria, my_latest accuracy 100 | exactly that | PASS |
+| 4 | Score page | open an open assignment, submit with 1 band empty, then complete and confirm | "1 is still empty"; after confirm the form locks and a toast shows; lesson moves on when 2 have submitted | page + 8 workflows built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
+| 5 | Calibration page | Score it → Check my bands | accuracy % with colour and per-criterion "You x · team y" | page + 7 workflows built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
+| 6 | Mentee page | t3 opens c1 | journal entries listed; t1 opening c1 sees "not your mentee" error | built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |

@@ -196,3 +196,13 @@ Calibration page: section "Boss Calibration" `da18abb5-0a14-4bea-bf36-28028a3068
 Decision page: section "Boss Lesson Decision" `5282ea85-5678-4c16-bfe4-1816fc21e04c`; variable dLesson `bbddc826-37d1-4d15-b104-083ab81eb452`. Function "Boss: load lesson" `c0a1b2c3-0220-…`; onload `0221`; outcome `0222`; ask/cancel/backdrop/confirm decision `0223…0226`; add observer open/pick/close×3/confirm `0227…0232`; reopen scores `0233`. Shared "Hide toast later" `c0a1b2c3-0099-…`.
 - The decision needs a confirmation dialog because it cannot be changed; the page checks the 2-observer rule and the override note before the dialog opens (the endpoint checks them again).
 Report page: section "Report" `3ed12d6b-ec29-4182-af15-c196b3465532` (no sidebar, max 760 px wide); onload `c0a1b2c3-0240-…` reuses "Boss: load lesson"; Print `0241` runs `window.print()` (custom JS: WeWeb has no print action). The Print button also prints; hide it in the print dialog's "headers" or ignore.
+
+## Task 13: Teacher pages
+
+Endpoint `teacher_my_work` `/teacher/my-work` — `9ff37dd3-9c9f-4bec-b644-b561ab81ff79` (teacher) → `{ assignments: [{assignment_id, submitted, submitted_at, lesson_id, type, scheduled_at, group_name, topic, status, candidate_name, decided}], mentees: [{id, name, login, stage, journal_count}] }`.
+Variables: tWork `91d4b94b-3e12-4e77-8603-fd01b6c622f6`, tForm `2a9b9c95-78d2-4670-a48d-7cfdf2341308`, tOpen `ab3c918a-70cb-4205-ab65-d8e6a673b9ea`, tCal `f2a57176-f090-4d76-acb7-d1bc84f7cbf9`.
+Pages and sections: home `164d60b2…` (section `e7aa6f72`), mentee `ea48e8e3…` (`5e63aeb3`), score `83ab9c3a…` (`4904ca75`), calibration `0165247c…` (`4f98306f-555e-4ba9-910f-b4861bb96cd8`).
+Workflows (folder Teacher/): functions "Teacher: load my work" `c0a1b2c3-0250-…`, "Teacher: load scoring form" `0254`, "Teacher: load calibration" `0270`. Home onload `0251`, tab `0252`; mentee onload `0253`; score onload `0255`, band `0256`, descriptors `0257`, comment `0258`, check `0259`, close/cancel `0260/0261`, confirm submit `0262`; calibration onload `0271`, score it `0272`, band `0273`, descriptors `0274`, check my bands `0275`, back `0276/0277`.
+- Scoring and calibration share one form variable (tForm) and the same chip pattern (nested repeat items `{n, cid}`).
+- Submitted scores come back with `locked: true`; band clicks are ignored and the submit button checks it again. The backend still refuses a second submit (`ALREADY_SUBMITTED`).
+- Calibration reference bands stay hidden until the teacher has sent their own bands; the result view compares per criterion (green same, blue 1 off, amber 2, red 3+).
