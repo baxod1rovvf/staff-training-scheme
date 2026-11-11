@@ -154,3 +154,15 @@ Decisions:
 - Content sections on role pages use `margin-left: 248px` on desktop and `0` on tablet/mobile so they clear the fixed sidebar (applied as each page is built in Tasks 10–14).
 - Nav labels are grey (`ed-sidebar-text`); the active item is marked by the `nav_a` background. Hover/active white text would need the parent-state ids that WeWeb regenerates on insert, so it was left out.
 - Browser checks wait for the first publish: the live site is still v1 (2026-11-07) and publishing can only be done from the WeWeb editor.
+
+## Task 10: Creator panel (page `creator`)
+
+Sections: "Creator Accounts" `32f9c609-fbe7-4d62-9fd4-de612c6370ac`, "Creator Overlays" `b7690062-cb24-402f-850b-aab59ceb64b9`.
+Variables (folder Creator): crAccounts `b8deca6c-bcf0-4c87-b534-9220b20e12aa`, crTeachers `cee26e3c-cab2-450a-9c30-429e1afcb6e8`, crLoading `f169bab4-a044-47a7-b72c-0d31b6247641`, crFilter `ec388d18-006d-4c97-997f-43ebce1d91cd`, crPanel `f80b6122-387c-4a56-88bf-7fd437bdffd2`, crTarget `d90d1f71-6395-4af2-a0a7-fdc4421bb8c0`, crForm `b6f3b713-7256-402c-a451-c8b5dfff0ec4`, crSaving `783d2a08-0d93-4680-8a41-165ec4591042`, crError `45c64c2b-8a4a-46bd-b29b-77474193e9ee`, crToast `50322557-a9ce-4d0f-b082-b68cceb33161`.
+Function workflows: "Creator: load accounts" `c0a1b2c3-0001-…`, "Creator: close overlay" `c0a1b2c3-0002-…`, "Creator: show toast" `c0a1b2c3-0003-…`. Element/page workflows `c0a1b2c3-0010-…` to `c0a1b2c3-0041-…` (load on open, search, 8 filter chips, open create/edit/password/block, 4 close, 7 option chips, Save account, Confirm dialog).
+
+Decisions:
+- Option pickers (role, status, mentor) are chips, not select boxes: there are at most a handful of choices and they stay visible on mobile.
+- WeWeb requires every endpoint parameter to be sent, so `creator_update_user` now treats empty full_name/login/role/status/stage as "not changed" (empty telegram_chat_id / mentor_id still clear). The block action sends the account's current Telegram id and mentor so they are kept.
+- Double submit: Save and Confirm start with "already saving?" and the loader flag is reset in the trycatch `finally`.
+- Design patterns (chips, table, slide-over, dialog, toast) appended to the WeWeb design guidelines.
