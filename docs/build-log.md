@@ -215,3 +215,10 @@ Workflows (folder Candidate/): functions "Candidate: load my results" `c0a1b2c3-
 - The result page finds the lesson inside cMe (no extra endpoint); the backend only returns bands, comments and the boss note after the decision, and never observer names.
 - Stage tracker: 6 steps (shadowing, micro-teaching, full trial, decision, probation, certified); "declined" shows a banner instead.
 - The journal is loaded with the user's own id; journal_list ignores it for candidates and always returns their own entries.
+
+## Fixes after the first live publish (v3)
+
+- Sidebar navigation links were hidden on the live site: their role check used `wwFormulas.includes(...)`, which did not work in the published app (the role caption next to them, using plain `.includes`, did). The 4 role groups now use `(globalContext.auth?.user?.roles || []).includes('<role>')`. On phones the same sidebar becomes a top bar with horizontally scrolling links.
+- Creator "Save account" (`c0a1b2c3-0040`): when the error code is unknown, the message now adds the server's own words ("Details: …") so live-only failures can be diagnosed; the toast is cleared at the start of each save.
+- The same account values that failed on the live site (teacher, login `TOXIRJON`, 8-digit password) create fine in the editor backend; cause still open.
+- "Made with WeWeb" badge: controlled by the WeWeb plan, not by the project; it cannot be hidden from the app.
