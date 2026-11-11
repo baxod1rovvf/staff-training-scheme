@@ -197,3 +197,21 @@ New endpoint `boss_list_lessons` (runBackendWorkflow as `test.boss`):
 | 3 | Home / result pages | sign in as test.c2, open the lesson | stage tracker at Probation; result shows 7.0, bars, comments, note | pages + 3 workflows built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
 | 4 | Journal page | save with "What I will use" empty, then complete | "Please fill in: what you will use."; then saved, form emptied, toast, entry on top | built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
 | 5 | Materials page | filter Exercises | only exercises; file/link buttons open in a new tab | built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
+
+## Task 15: End-to-end walkthrough
+
+Run on the backend with fresh accounts (each step as the real role). The same flow in the browser is waiting for the live-site run.
+
+| # | Step | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | creator_create_user ×5 | as creator: e2e.boss (boss), e2e.t1, e2e.t2, e2e.t3 (teachers), e2e.c1 (candidate, mentor e2e.t1) | accounts created; candidate starts at Shadowing | 5 accounts; e2e.c1 stage `shadowing` | PASS |
+| 2 | boss_schedule_lesson | as e2e.boss: full lesson for e2e.c1 with observers e2e.t1 (the mentor) + e2e.t2 | refused: mentor cannot observe | `MENTOR_AS_OBSERVER` | PASS |
+| 3 | boss_update_candidate | mentor → e2e.t3, stage → full_trial | saved | stage `full_trial`, mentor e2e.t3 | PASS |
+| 4 | boss_schedule_lesson | same lesson, observers e2e.t1 + e2e.t2 | lesson + 2 assignments; Telegram skipped (no token) | lesson `scheduled`, 2 assignments, `telegram_failed` both | PASS |
+| 5 | teacher_my_work | as e2e.t1 | the new lesson in "to score" | 1 assignment, not submitted, candidate "E2E Candidate" | PASS |
+| 6 | teacher_submit_scores | e2e.t1 (10 bands, 1 comment), then e2e.t2 | first: 1 submitted; second: lesson `awaiting_decision` | `submitted_count` 1, then 2; lesson `awaiting_decision` | PASS |
+| 7 | candidate_my_results (before decision) | as e2e.c1 | lesson "Waiting", no bands or comments | status `Waiting`, basic fields only | PASS |
+| 8 | boss_get_lesson | as e2e.boss | overall 7 (raw 7.1), ready, no disagreements | overall 7, raw 7.1, `ready`, disagreements [] | PASS |
+| 9 | boss_decide | approved, with note | decision stored; lesson approved; candidate → Probation | decision approved 7; stage `probation` | PASS |
+| 10 | candidate_my_results (after) | as e2e.c1 | Approved 7, 10 bands, 4 comments, boss note, no observer names | exactly that; comments carry no names | PASS |
+| 11 | Same flow in the browser + screenshots at 375 / 1280 | live site | as above, on every page | not run (user deferred browser tests) | DEFERRED (user skipped browser run; test on live site later) |
