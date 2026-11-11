@@ -1,6 +1,6 @@
 # Edunest Teacher Certification Pathway
 
-**Live app: https://directional-calculus.weweb.app** (sign in at [/login](https://directional-calculus.weweb.app/login))
+**Live app: https://directional-calculus.weweb-preview.io** (sign in at [/login](https://directional-calculus.weweb-preview.io/login))
 
 A WeWeb app that takes a new teacher from "candidate" to "certified Edunest teacher".
 Observers score trial lessons against one shared standard (4 areas, 10 criteria, bands 1–9
