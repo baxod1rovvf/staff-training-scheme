@@ -107,3 +107,34 @@ Data kept: calibration lesson "Elementary speaking lesson (sample)" with attempt
 
 Scheduled Tasks are not in the current WeWeb plan (`JOBS_PLAN_REQUIRED`). Built `boss_send_reminders` `/boss/reminders/send` — `4fce8c44-b0fd-4117-be16-12344e8fb6e4` (boss) instead, used by a "Send reminders" button on the boss dashboard. When the plan is upgraded, the same steps can run as a daily Scheduled Task at 09:00 Asia/Tashkent.
 
+## Task 9: Frontend foundation (in progress)
+
+Global formula `edErrorText(err)` — `43e3c095-9a63-4580-94af-55d174e74c28` (error code → friendly sentence).
+Variables: `loginError` `c5d22f8d-3fb4-4f15-88d6-aa2da410f844`, `isSigningIn` `ac22d2ec-8e67-4b8d-b4c1-06c4ebe78ac3`.
+App default theme: light. Design system: see `docs/design-system.md`.
+
+Pages:
+| page | path | id |
+|---|---|---|
+| Login | login | b1b67da0-8601-4730-89fc-5a927645ad75 (form `c3d54584-2e74-4790-a0a6-08bd5824831b`, workflow "Sign in" `8f3c2a10-4b1e-4c7a-9d2e-1a2b3c4d5e01`) |
+| Home (redirect) | home | 3c48aeea-ea0f-4378-9a32-1456e6c05c19 |
+| Creator · Accounts | creator | cae3c561-7d2d-4778-b042-a06430354e6f |
+| Boss · Dashboard | boss | 79819aa0-7c72-4088-8675-9627745a35ce |
+| Boss · Candidates | boss/candidates | 9c053e5c-2f86-4b76-8bb4-f7a2c6a76214 |
+| Boss · Candidate | boss/candidate/{{candidateId}} | 60eac284-efe6-448a-b774-a75d2ec5afc6 |
+| Boss · Lessons | boss/lessons | e8ba6e60-cded-4962-942a-cb3dd42f9ee6 |
+| Boss · Lesson decision | boss/lesson/{{lessonId}} | 389fd162-3361-4df7-96e5-4994c7447666 |
+| Boss · Report | boss/report/{{lessonId}} | 76ba1daa-5ac4-4d2c-a648-1923beb9c439 |
+| Boss · Standard | boss/standard | 51e1b5ef-a028-48a8-a43b-a407bad62071 |
+| Boss · Materials | boss/materials | 6c93aa63-bbfd-44cc-9e74-08b83bb461f3 |
+| Boss · Calibration | boss/calibration | 6d42e90f-1335-4752-9c4f-aa83c22dbe1b |
+| Teacher · My lessons | teacher | 164d60b2-51ec-4a64-828e-f2d1bfa48980 |
+| Teacher · Score lesson | teacher/score/{{assignmentId}} | 83ab9c3a-26d6-46c6-810d-39009ccf08aa |
+| Teacher · Calibration | teacher/calibration | 0165247c-1cc0-4f6b-b9e9-d8f99febcbb3 |
+| Teacher · Mentee journal | teacher/mentee/{{candidateId}} | ea48e8e3-09b9-4303-a937-321eb42836bb |
+| Candidate · Home | candidate | a7539762-ed1b-465a-adfa-3e1780c12e4f |
+| Candidate · Result | candidate/result/{{lessonId}} | 7d3bf514-c0cf-4f36-ad38-c53b0a14fb2e |
+| Candidate · Materials | candidate/materials | a12cbeae-c620-417c-af0f-d2babcb0deb1 |
+| Candidate · Journal | candidate/journal | 8d499a16-0fd7-40bc-a0b6-f6777f03d68e |
+| Signup / Forgot password (old) | — | f7e55307-a820-4748-82f0-e00aa3246bbd / a31d97b7-2106-46d9-9c83-2032ae3cad69 → emptied, draft |
+
