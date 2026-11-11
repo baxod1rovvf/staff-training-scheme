@@ -215,3 +215,11 @@ Run on the backend with fresh accounts (each step as the real role). The same fl
 | 9 | boss_decide | approved, with note | decision stored; lesson approved; candidate → Probation | decision approved 7; stage `probation` | PASS |
 | 10 | candidate_my_results (after) | as e2e.c1 | Approved 7, 10 bands, 4 comments, boss note, no observer names | exactly that; comments carry no names | PASS |
 | 11 | Same flow in the browser + screenshots at 375 / 1280 | live site | as above, on every page | not run (user deferred browser tests) | DEFERRED (user skipped browser run; test on live site later) |
+
+## Test data cleanup (11 Nov 2026, approved by the owner)
+
+| # | Step | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | Delete test rows | 3 trial lessons, 1 journal entry, 1 material ("Past simple drills", link only), 1 sample calibration lesson | rows gone; assignments, scores, decisions and calibration attempts removed by cascade | all 4 tables empty; observer_assignments, scores, decisions, calibration_attempts empty | PASS |
+| 2 | Keep the standard | rubric_versions, criteria | v1 active with 10 criteria | v1 active, 10 criteria | PASS |
+| 3 | Delete test accounts | 11 accounts (`test.*`, `e2e.*`) | only `creator` left | creator_list_users returns only `creator` | PASS |

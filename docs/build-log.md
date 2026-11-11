@@ -101,7 +101,7 @@ Endpoints:
 - `teacher_submit_calibration` `/teacher/calibration/submit` — `32e93dc4-77c9-4b94-814c-dec978d919af`
 - `calibration_overview` `/calibration/overview` — `09d578c6-199c-437b-a1fb-19977fe97c37` (boss: lessons + teacher accuracy; teacher: active lessons, reference hidden until they have an attempt)
 
-Data kept: calibration lesson "Elementary speaking lesson (sample)" with attempts by t1 (100) and t2 (75).
+Data kept: calibration lesson "Elementary speaking lesson (sample)" with attempts by t1 (100) and t2 (75). (Deleted in the test data cleanup, 11 Nov 2026.)
 
 ## Task 8: Scoring reminders
 

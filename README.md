@@ -68,32 +68,10 @@ Without a token or chat id, the app still works; messages are just skipped. The 
 
 Daily automatic reminders need WeWeb Scheduled Tasks, which are not in the current plan. The boss uses the **Send reminders** button on the dashboard instead. After a plan upgrade, `boss_send_reminders` can run as a daily Scheduled Task.
 
-## Test accounts
+## Accounts
 
-Passwords are not stored in this repository. The creator can reset any password from the Accounts page.
-
-| Login | Role | Note |
-|---|---|---|
-| `creator` | Creator | Keep: this is the real creator account. |
-| `test.boss` | Boss | Test data |
-| `test.t1`, `test.t2`, `test.t3` | Teacher | Test data (`test.t3` mentors `test.c1`) |
-| `test.c1`, `test.c2` | Candidate | Test data |
-| `e2e.boss`, `e2e.t1`, `e2e.t2`, `e2e.t3` | Boss / teachers | End-to-end walkthrough (Task 15), `e2e.t3` mentors `e2e.c1` |
-| `e2e.c1` | Candidate | End-to-end walkthrough, approved full lesson, now on Probation |
-
-See "Test data cleanup" below before going live.
-
-## Test data cleanup (not done yet; needs the owner's OK)
-
-To go live, remove everything except the `creator` account and the standard:
-
-1. Trial lessons of the test candidates (deleting a lesson also deletes its observer assignments, scores and decision).
-2. Journal entries of the test candidates.
-3. The sample calibration lesson "Elementary speaking lesson (sample)" and its attempts, or keep it as a real practice lesson.
-4. Test materials ("Past simple drills" and any others added while testing).
-5. The 12 test accounts listed above (`test.*` and `e2e.*`).
-
-Keep: the `creator` account, standard v1 with its 10 criteria, all endpoints, pages and settings.
+Only the `creator` account exists. The creator makes every other account from the Accounts page.
+All test accounts and test data were deleted on 11 Nov 2026 (see `docs/test-cases.md`, "Test data cleanup").
 
 ## Handover notes for the main Edunest system
 
@@ -124,4 +102,3 @@ The scoring rules live in one JavaScript block that is the same in `boss_get_les
 
 - Browser tests on the live site (all page rows marked DEFERRED in `docs/test-cases.md`), including screenshots at 375 px and 1280 px.
 - Telegram bot token and teacher chat ids (see above).
-- Test data cleanup (see above).
