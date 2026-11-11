@@ -1,6 +1,8 @@
 # Edunest Teacher Certification Pathway
 
-**Live app: https://directional-calculus.weweb-preview.io** (sign in at [/login](https://directional-calculus.weweb-preview.io/login))
+**Live app: https://baxod1rovvf.github.io/staff-training-scheme/** (GitHub Pages; it opens the app hosted on WeWeb at https://directional-calculus.weweb-preview.io/login)
+
+How updates go live: changes to pages, logic or data are made in WeWeb and go live when **Publish** is pressed in the WeWeb editor. Changes to this repository (docs, the GitHub Pages entry page) go live when they are merged into `main`.
 
 A WeWeb app that takes a new teacher from "candidate" to "certified Edunest teacher".
 Observers score trial lessons against one shared standard (4 areas, 10 criteria, bands 1–9
