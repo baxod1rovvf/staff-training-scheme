@@ -158,4 +158,5 @@ New endpoint `boss_list_lessons` (runBackendWorkflow as `test.boss`):
 | 2 | boss_list_lessons | lesson L (bands differ by 3 on a criterion) | has_disagreement true | true | PASS |
 | 3 | boss_list_lessons | candidate_id = test.c1 | only test.c1's lesson | only L2 | PASS |
 | 4 | boss_send_reminders | no Telegram token | overdue list returned, nothing sent, telegram_configured false | 1 overdue (Test Teacher Two), sent false, telegram_configured false | PASS |
+| 6 | Candidates page | open `/boss/candidates`, type in search, pick a stage chip | table narrows on name/login and stage; row opens the candidate page | page + 9 workflows built (editor data); browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
 | 5 | Dashboard page | open `/boss` | 4 stat cards, decision / upcoming / recent lists, teacher accuracy | page built with load workflow (editor data); browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
