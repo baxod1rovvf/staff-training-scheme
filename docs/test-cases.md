@@ -120,3 +120,15 @@ WeWeb Scheduled Tasks need a paid plan (`JOBS_PLAN_REQUIRED`), so reminders are 
 |---|---|---|---|---|---|
 | 1 | getJobsConfiguration | editor | Scheduled Tasks available | `JOBS_PLAN_REQUIRED` → ruling: manual reminders | PASS |
 | 2 | boss_send_reminders | L2 (t1 submitted, t2 not, 1+ day ago), L decided | overdue list = [t2 on L2] only; `sent: false` (no bot token) | 1 row: Test Teacher Two / Test Candidate One, sent false, telegram_configured false | PASS |
+## Task 9: Design system, shell and login
+
+Checked in the WeWeb editor preview / published editor link with a real browser.
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | Login page | open `/login` at 375 and 1280 px | split layout at 1280, single column at 375, no horizontal scroll | — | TODO |
+| 2 | Login | wrong password | "Login or password is incorrect" shown, stays on page | — | TODO |
+| 3 | Login | `test.boss` / correct password | lands on `/boss` | — | TODO |
+| 4 | Login | `test.t1`, `test.c1`, `creator` | land on `/teacher`, `/candidate`, `/creator` | — | TODO |
+| 5 | Role guard | teacher opens `/boss` | sent to own home `/teacher` | — | TODO |
+| 6 | Pages | Signup and Forgot password | removed | — | TODO |
