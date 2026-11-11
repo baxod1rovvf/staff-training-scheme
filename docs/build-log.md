@@ -206,3 +206,12 @@ Workflows (folder Teacher/): functions "Teacher: load my work" `c0a1b2c3-0250-â€
 - Scoring and calibration share one form variable (tForm) and the same chip pattern (nested repeat items `{n, cid}`).
 - Submitted scores come back with `locked: true`; band clicks are ignored and the submit button checks it again. The backend still refuses a second submit (`ALREADY_SUBMITTED`).
 - Calibration reference bands stay hidden until the teacher has sent their own bands; the result view compares per criterion (green same, blue 1 off, amber 2, red 3+).
+
+## Task 14: Candidate pages
+
+Variable cMe `73729c46-8710-4843-b5cb-5a09aaa544df` (kept between pages) = candidate_my_results `{name, stage, lessons:[{lesson_id, type, scheduled_at, group_name, topic, status, overall, boss_note, decided_at, criteria:[{name, area, band}], comments:[{criterion, comment}]}]}`.
+Sections: home "Candidate Home" `cf4f1456-97cd-472e-838a-97d6819adb8e`, result `21f08b93-5666-478e-bea6-e87c29e45aca`, materials `8813dfa9-c66d-4ba7-b65e-43dae4c643ff`, journal `0b27f48f-ffb8-4b48-8a59-043246ca9d4d`.
+Workflows (folder Candidate/): functions "Candidate: load my results" `c0a1b2c3-0300-â€¦`, "Candidate: load journal" `0306`; home onload `0301`; result onload `0302`; materials onload `0303`, type/level chips `0304/0305` (reuse the shared "Load materials" `0180`); journal onload `0307`; save entry `0308`.
+- The result page finds the lesson inside cMe (no extra endpoint); the backend only returns bands, comments and the boss note after the decision, and never observer names.
+- Stage tracker: 6 steps (shadowing, micro-teaching, full trial, decision, probation, certified); "declined" shows a banner instead.
+- The journal is loaded with the user's own id; journal_list ignores it for candidates and always returns their own entries.

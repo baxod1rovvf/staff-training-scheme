@@ -187,3 +187,13 @@ New endpoint `boss_list_lessons` (runBackendWorkflow as `test.boss`):
 | 4 | Score page | open an open assignment, submit with 1 band empty, then complete and confirm | "1 is still empty"; after confirm the form locks and a toast shows; lesson moves on when 2 have submitted | page + 8 workflows built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
 | 5 | Calibration page | Score it → Check my bands | accuracy % with colour and per-criterion "You x · team y" | page + 7 workflows built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
 | 6 | Mentee page | t3 opens c1 | journal entries listed; t1 opening c1 sees "not your mentee" error | built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
+
+## Task 14: Candidate pages
+
+| # | Workflow / check | Input | Expected | Actual | Result |
+|---|---|---|---|---|---|
+| 1 | candidate_my_results (data for home/result) | as test.c2 | name, stage probation, 1 lesson Approved 7 with 10 bands, 2 comments, boss note | exactly that | PASS |
+| 2 | journal_list (data for journal page) | as test.c1 with own id | c1's 1 entry | 1 entry "Test Teacher One" | PASS |
+| 3 | Home / result pages | sign in as test.c2, open the lesson | stage tracker at Probation; result shows 7.0, bars, comments, note | pages + 3 workflows built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
+| 4 | Journal page | save with "What I will use" empty, then complete | "Please fill in: what you will use."; then saved, form emptied, toast, entry on top | built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
+| 5 | Materials page | filter Exercises | only exercises; file/link buttons open in a new tab | built; browser run waiting | DEFERRED (user skipped browser run; test on live site later) |
