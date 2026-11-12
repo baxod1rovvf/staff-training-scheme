@@ -1,7 +1,36 @@
 // Talking to Supabase: sign in/out, calling the database functions, files.
 const cfg = window.EDUNEST_CONFIG || {};
 export const configured = !!(cfg.supabaseUrl && cfg.supabaseAnonKey);
-export const sb = configured ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey) : null;
+
+// "View as" (creator only): every database call carries the person's id; the database then
+// answers as that person and refuses any change. Kept for this browser tab only.
+let viewAs = null;
+try { viewAs = JSON.parse(sessionStorage.getItem('edunest-view-as') || 'null'); } catch (e) { viewAs = null; }
+export const getViewAs = () => viewAs;
+export function setViewAs(v) {
+  viewAs = v;
+  try { v ? sessionStorage.setItem('edunest-view-as', JSON.stringify(v)) : sessionStorage.removeItem('edunest-view-as'); } catch (e) { /* private mode */ }
+}
+const fetchWithViewAs = (input, init = {}) => {
+  if (!viewAs || !String(input?.url || input).includes('/rest/v1/')) return fetch(input, init);
+  const headers = new Headers(init.headers || {});
+  headers.set('x-view-as', viewAs.id);
+  return fetch(input, { ...init, headers });
+};
+export const sb = configured ? window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, { global: { fetch: fetchWithViewAs } }) : null;
+
+// QR codes (loaded only when needed)
+let qrLib = null;
+export function loadQr() {
+  if (window.qrcode) return Promise.resolve(window.qrcode);
+  if (!qrLib) qrLib = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'assets/vendor/qrcode-generator-1.4.4.js';
+    s.onload = () => res(window.qrcode); s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  return qrLib;
+}
 
 export const LOGIN_DOMAIN = '@users.edunest.local';
 export const loginToEmail = login => String(login || '').trim().toLowerCase() + LOGIN_DOMAIN;
@@ -94,7 +123,22 @@ const MESSAGES = {
   NO_DRAFT: 'There are no unpublished changes.',
   NOT_FOUND: 'This item no longer exists.',
   NOT_YOUR_MENTEE: 'You can only read the journals of your mentees.',
-  UPLOAD_FAILED: 'The file could not be uploaded. Please try again.'
+  UPLOAD_FAILED: 'The file could not be uploaded. Please try again.',
+  PREVIEW_READ_ONLY: 'This is a preview: changes are switched off while you view the site as someone else.',
+  LESSON_CANCELLED: 'This lesson was cancelled.',
+  WRONG_PASSWORD: 'Your current password is not right.',
+  INVALID_CHAT_ID: 'A Telegram chat id is a number, for example 123456789.',
+  CANNOT_DELETE_SELF: 'You cannot delete your own account.',
+  HAS_HISTORY: 'This person already has lessons, scores or journal entries. Block the account instead, so the records stay.',
+  FEEDBACK_NOT_FOUND: 'This feedback link is not valid.',
+  FEEDBACK_CLOSED: 'Feedback for this lesson is closed.',
+  FEEDBACK_INCOMPLETE: 'Please answer all four questions.',
+  FEEDBACK_FULL: 'This lesson already has enough answers. Thank you!',
+  QUIZ_INCOMPLETE: 'Please answer every question.',
+  QUIZ_EMPTY: 'There are no questions yet.',
+  QUESTION_REQUIRED: 'Please write the question.',
+  OPTIONS_COUNT: 'Give 2 to 6 answer options.',
+  CORRECT_REQUIRED: 'Choose which answer is correct.'
 };
 // Friendly text for any error; unknown errors keep the server's own words so they can be reported.
 export function errorText(err) {

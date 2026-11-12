@@ -28,5 +28,8 @@ export const todayISO = () => { const x = new Date(); x.setMinutes(x.getMinutes(
 
 export const LESSON_STATUS = {
   scheduled: ['Scoring', 'info'], awaiting_decision: ['Awaiting decision', 'warning'],
-  approved: ['Approved', 'success'], declined: ['Declined', 'danger']
+  approved: ['Approved', 'success'], declined: ['Declined', 'danger'], cancelled: ['Cancelled', '']
 };
+// <input type="datetime-local"> value for a date, in the browser's time zone
+export const toLocalInput = v => { const x = new Date(v); if (isNaN(x)) return ''; x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
+export const appUrl = () => location.origin + location.pathname.replace(/index\.html$/, '');

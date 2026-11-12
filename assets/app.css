@@ -45,6 +45,10 @@ h1, h2, h3, p { margin: 0; }
 .nav a { display: flex; align-items: center; gap: var(--sm); padding: 9px var(--sm); border-radius: var(--r-sm); text-decoration: none; color: var(--sb-text); font-weight: 500; transition: background-color .15s ease, color .15s ease; }
 .nav a:hover { background: var(--sb-act); color: #fff; }
 .nav a.active { background: var(--indigo); color: #fff; }
+.view-as { margin-top: var(--md); padding-top: var(--md); border-top: 1px solid #FFFFFF1A; }
+.nav-title { font: 600 11px/1.4 Inter, sans-serif; text-transform: uppercase; letter-spacing: .06em; color: #94A3B8; padding: 0 var(--sm) var(--xs); }
+.nav.view-as a.active { background: var(--am); }
+.preview-banner { display: flex; align-items: center; gap: var(--sm); flex-wrap: wrap; background: var(--am-s); color: #92400E; border: 1px solid #D9770640; border-radius: var(--r-md); padding: 10px var(--md); }
 .user-box { display: flex; align-items: center; gap: var(--sm); padding: var(--sm); border-radius: var(--r-sm); background: var(--sb-act); }
 .avatar { width: 34px; height: 34px; border-radius: 999px; background: var(--indigo); color: #fff; display: grid; place-items: center; font-weight: 600; flex: none; }
 .user-name { color: #fff; font-weight: 600; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

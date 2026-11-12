@@ -9,10 +9,11 @@ export function CreatorAccounts({ me }) {
   const users = useLoad(() => rpc('creator_list_users'));
   const [q, setQ] = useState('');
   const [role, setRole] = useState('');
+  const [status, setStatus] = useState('active');
   const [form, setForm] = useState(null);
   const [pw, setPw] = useState(null);
 
-  const list = (users.data || []).filter(u => (!role || u.role === role) &&
+  const list = (users.data || []).filter(u => (!role || u.role === role) && (!status || u.status === status) &&
     (!q.trim() || (u.full_name + ' ' + u.login).toLowerCase().includes(q.trim().toLowerCase())));
   const teachers = (users.data || []).filter(u => u.role === 'teacher' && u.status === 'active');
 
@@ -27,12 +28,13 @@ export function CreatorAccounts({ me }) {
           <input class="input" style="padding-left:40px" placeholder="Search by name or login" aria-label="Search accounts" value=${q} onInput=${e => setQ(e.target.value)} />
         </div>
         <${Chips} options=${[['', 'All'], ...ROLES.map(([k, l]) => [k, l])]} value=${role} onChange=${setRole} />
+        <${Chips} options=${[['active', 'Active'], ['blocked', 'Blocked'], ['', 'All statuses']]} value=${status} onChange=${setStatus} />
       </div>
     </div>
     <div class="card flush">
       ${users.loading && !users.data ? html`<${Loader} />` : users.error ? html`<div style="padding:var(--md)"><${ErrorBox} error=${users.error} /></div>`
         : list.length === 0 ? html`<${Empty} icon="users" title=${users.data.length ? 'No accounts match' : 'No accounts yet'}
-            text=${users.data.length ? 'Try another search or role.' : 'Create the first boss, teacher or candidate account.'} />`
+            text=${users.data.length ? 'Try another search, role or status.' : 'Create the first boss, teacher or candidate account.'} />`
         : html`<div class="table-wrap"><table class="table">
           <thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Telegram</th><th>Created</th><th></th></tr></thead>
           <tbody>${list.map(u => html`<tr class="click" onClick=${() => setForm({ ...EMPTY, ...u, password: '', telegram_chat_id: u.telegram_chat_id || '', mentor_id: u.mentor_id || '' })}>
@@ -52,6 +54,11 @@ export function CreatorAccounts({ me }) {
 function AccountForm({ form, me, teachers, onClose, onSaved }) {
   const [f, setF] = useState(form);
   const [run, busy, error] = useAction();
+  const [del, setDel] = useState(false);
+  const remove = () => run(async () => {
+    await rpc('creator_delete_user', { p_user_id: f.id });
+    setDel(false); onSaved('Account deleted: ' + form.full_name);
+  });
   const editing = !!f.id;
   const self = f.id === me.id;
   const set = (k, v) => setF({ ...f, [k]: v });
@@ -86,7 +93,14 @@ function AccountForm({ form, me, teachers, onClose, onSaved }) {
         <option value="">No mentor</option>${teachers.map(t => html`<option value=${t.id}>${t.full_name}</option>`)}</select></${Field}>` : null}
     <${Field} label="Telegram chat id (optional)" id="f-tg" hint="Needed only for lesson messages by Telegram. The person gets it from @userinfobot.">
       <input id="f-tg" class="input" inputmode="numeric" value=${f.telegram_chat_id} onInput=${e => set('telegram_chat_id', e.target.value)} placeholder="e.g. 123456789" /></${Field}>
+    ${editing && !self ? html`<div class="stack sm" style="border-top:1px solid var(--border);padding-top:var(--md)">
+      <span class="label">Delete account</span>
+      <p class="hint">Only for accounts made by mistake. People with lessons, scores or journal entries are blocked instead, so the records stay.</p>
+      <div><${Button} kind="secondary" small icon="trash-2" onClick=${() => setDel(true)}>Delete account</${Button}></div></div>` : null}
     <${ErrorBox} error=${error} />
+    ${del ? html`<${Dialog} title=${'Delete ' + form.full_name + '?'} onClose=${() => setDel(false)}
+      footer=${html`<${Button} kind="secondary" onClick=${() => setDel(false)}>Cancel</${Button}><${Button} kind="danger" busy=${busy} onClick=${remove}>Delete account</${Button}>`}>
+      <p class="muted">The login @${form.login} stops working and the account disappears. This cannot be undone.</p><${ErrorBox} error=${error} /></${Dialog}>` : null}
   </${SlideOver}>`;
 }
 

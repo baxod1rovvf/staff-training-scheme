@@ -74,7 +74,7 @@ const ok = msg => console.log('ok  ' + msg);
     // Boss: schedule a full lesson
     await login('jasurbek', 'boss-pass-1');
     expect(page.url().includes('#/boss'), 'boss lands on dashboard');
-    expect((await page.locator('.nav a').count()) === 6, 'boss sees 6 navigation links');
+    expect((await page.locator('.nav a').count()) === 9, 'boss sees 9 navigation links (incl. Analytics, Methods quiz, My account)');
     await shot('boss-dashboard');
     await go('boss/lessons');
     await page.click('text=Schedule lesson');
@@ -187,6 +187,125 @@ const ok = msg => console.log('ok  ' + msg);
     await page.waitForSelector('a.list-row:has-text("Candidate One")'); await page.click('a.list-row:has-text("Candidate One")');
     await page.waitForURL(/teacher\/mentee\//); await page.waitForSelector('#main :text("CCQs before tasks.")', { timeout: 8000 }); ok('mentor reads the journal');
     await shot('teacher-mentee');
+
+
+    // ===================== New features =====================
+    const pad = n => String(n).padStart(2, '0');
+    const inDays = d => { const f = new Date(Date.now() + d * 86400000); return `${f.getFullYear()}-${pad(f.getMonth() + 1)}-${pad(f.getDate())}T10:00`; };
+    const schedule = async (type, days) => {
+      await go('boss/lessons'); await page.click('text=Schedule lesson');
+      await page.selectOption('#s-c', { label: 'Candidate One' });
+      await page.click(`.slideover .chip:text-is("${type}")`);
+      await page.fill('#s-w', inDays(days));
+      await page.click('.slideover .chip:has-text("Toxirjon Baxodirov")'); await page.click('.slideover .chip:has-text("Teacher Two")');
+      await page.click('.slideover-foot >> text=Schedule'); await waitToast('Lesson scheduled');
+      await page.waitForSelector('.slideover', { state: 'detached' });
+    };
+
+    // Student feedback by QR code (on the decided lesson)
+    await login('jasurbek', 'boss-pass-1');
+    await go('boss/lessons'); await page.click('.list-row:has-text("Approved")'); await page.waitForSelector('text=Student feedback');
+    await page.click('text=Show QR code'); await page.waitForSelector('[aria-label="QR code for student feedback"] svg');
+    const fbLink = await page.locator('code').innerText();
+    expect(fbLink.includes('#/feedback/'), 'QR code and feedback link shown');
+    await shot('boss-lesson-qr');
+    const student = await browser.newContext({ viewport: { width: 390, height: 844 } }); const sp = await student.newPage();
+    await sp.goto(fbLink); await sp.waitForSelector('text=How was the lesson');
+    await sp.click('text=Send');
+    expect((await sp.locator('.error-text').innerText()).includes('all four'), 'feedback asks for all four answers');
+    for (let i = 0; i < 4; i++) await sp.locator('.chips').nth(i).locator('button').nth(i === 2 ? 2 : 4).click();
+    await sp.screenshot({ path: `${OUT}/${String(++step).padStart(2, '0')}-student-feedback-390.png`, fullPage: true });
+    await sp.fill('#fb-c', 'Very fun lesson!'); await sp.click('text=Send'); await sp.waitForSelector('text=Thank you!');
+    ok('student sends feedback without signing in');
+    await student.close();
+    await page.reload(); await page.waitForSelector('text=1 student answered'); ok('boss sees the student feedback');
+
+    // Edit, then (later) cancel a lesson; remove an observer
+    await schedule('Micro-teaching', 2);
+    await page.click('.list-row:has-text("Scoring 0/2")'); await page.waitForSelector('text=Cancel lesson');
+    await page.click('.page-header >> text=Edit'); await page.fill('#e-g', 'Pre-Int 2'); await page.fill('#e-t', 'Holidays');
+    await page.fill('#e-w', inDays(3)); await page.click('.slideover-foot >> text=Save');
+    await waitToast('Lesson moved'); ok('lesson moved and edited');
+    const lessonUrl = page.url();
+
+    // Teacher: drafts survive a reload
+    await login('toxirjon', '22222222');
+    await page.click('a.list-row:has-text("Candidate One")'); await page.waitForSelector('.bands');
+    for (let i = 0; i < 3; i++) await page.locator('.bands').nth(i).locator('button:text-is("8")').click();
+    await page.fill('#overall', 'Half way through');
+    await page.reload(); await page.waitForSelector('text=were restored');
+    expect((await page.locator('.band.on').count()) === 3 && (await page.inputValue('#overall')) === 'Half way through', 'score draft restored after reload');
+    await shot('teacher-score-draft');
+
+    // Boss removes an observer, then cancels the lesson
+    await login('jasurbek', 'boss-pass-1');
+    await page.goto(lessonUrl); await page.waitForSelector('text=Cancel lesson');
+    await page.click('.list-row:has-text("Teacher Two") >> text=Remove'); await page.click('.dialog button:text-is("Remove observer")');
+    await waitToast('no longer observes'); ok('observer removed');
+    await page.click('.page-header >> text=Cancel lesson'); await page.fill('#cr', 'Candidate is ill');
+    await page.click('.dialog button:text-is("Cancel lesson")'); await waitToast('Lesson cancelled');
+    await page.waitForSelector('.warn-box:has-text("Candidate is ill")'); ok('lesson cancelled with reason');
+    await shot('boss-lesson-cancelled');
+    await schedule('Full trial lesson', 4);
+
+    // Boss: analytics and quiz pages
+    await go('boss/analytics'); await page.waitForSelector('text=Criteria, weakest first'); ok('analytics page');
+    await shot('boss-analytics');
+    await go('boss/quiz'); await page.waitForSelector('.card:has-text("concept-check")'); ok('quiz page lists the starter questions');
+    await shot('boss-quiz');
+
+    // Candidate: next lesson card and the quiz
+    await login('cand1', 'cand-1-pass');
+    await page.waitForSelector('text=Your next lesson'); ok('candidate sees the next lesson card');
+    expect(!(await page.locator('#main').innerText()).includes('Holidays'), 'cancelled lesson is not shown to the candidate');
+    await shot('candidate-home-next');
+    await go('candidate/quiz'); await page.waitForSelector('input[type=radio]');
+    await page.click('text=Check my answers');
+    expect((await page.locator('.sticky-bar .error-text').innerText()).includes('still open'), 'quiz asks for every answer');
+    const qcards = page.locator('.card.criterion'); for (let i = 0; i < await qcards.count(); i++) await qcards.nth(i).locator('input[type=radio]').nth(1).check();
+    await page.click('text=Check my answers'); await page.waitForSelector('.display:has-text("/ 8")');
+    ok('quiz scored: ' + await page.locator('.display').innerText());
+    await shot('candidate-quiz-result');
+
+    // My account: change own password, then sign in with it
+    await login('toxirjon', '22222222');
+    expect(!(await page.locator('#main').innerText()).includes('Holidays'), 'cancelled lesson gone from the teacher list');
+    await go('account');
+    await page.fill('#pw-c', 'wrong-one'); await page.fill('#pw-n', 'toxirjon-new-1'); await page.fill('#pw-a', 'toxirjon-new-1');
+    await page.click('button:has-text("Change password")');
+    expect((await (await page.waitForSelector('.error-box')).innerText()).includes('current password is not right'), 'wrong current password refused');
+    await page.fill('#pw-c', '22222222'); await page.click('button:has-text("Change password")'); await waitToast('Password changed');
+    await shot('my-account');
+    await login('toxirjon', 'toxirjon-new-1'); ok('signed in with the new password');
+
+    // Creator: view the site as a teacher and as a candidate (read-only)
+    await login('creator', 'creator-pass-1');
+    await page.click('.view-as a:has-text("Teacher")'); await page.click('.dialog .list-row:has-text("Toxirjon Baxodirov")');
+    await page.waitForSelector('.preview-banner:has-text("Toxirjon Baxodirov")');
+    expect((await page.locator('.nav a:has-text("My lessons")').count()) === 1, 'creator sees the teacher navigation');
+    await shot('creator-view-as-teacher');
+    await go('account'); expect(await page.locator('button:has-text("Change password")').isDisabled(), 'changes are switched off in View as');
+    await page.click('text=Exit view'); await page.waitForURL(/#\/creator/); await page.waitForSelector('tbody tr'); ok('exit view returns to Accounts');
+    await page.click('.view-as a:has-text("Candidate")'); await page.click('.dialog .list-row:has-text("Candidate One")');
+    await page.waitForSelector('text=My stage'); ok('creator sees the candidate home');
+    await shot('creator-view-as-candidate');
+    await page.click('text=Exit view'); await page.waitForURL(/#\/creator/);
+
+    // Creator: delete an account made by mistake; people with history cannot be deleted
+    await page.click('text=Create account');
+    await page.fill('#f-name', 'Typo Person'); await page.fill('#f-login', 'typo1'); await page.fill('#f-pw', 'typo-pass-1');
+    await page.click('.slideover-foot >> text=Create account'); await waitToast('Account created');
+    await page.waitForSelector('.slideover', { state: 'detached' });
+    await page.click('tbody tr:has-text("Typo Person")'); await page.click('.slideover button:has-text("Delete account")');
+    await page.click('.dialog button:text-is("Delete account")'); await waitToast('Account deleted'); ok('account deleted');
+    await page.click('tbody tr:has-text("Toxirjon Baxodirov")'); await page.click('.slideover button:has-text("Delete account")');
+    await page.click('.dialog button:text-is("Delete account")');
+    expect((await (await page.waitForSelector('.dialog .error-box')).innerText()).includes('Block the account instead'), 'accounts with history cannot be deleted');
+    await page.click('.dialog button:text-is("Cancel")'); await page.click('.slideover-foot >> text=Cancel');
+
+    // Installable app
+    const pwa = await page.evaluate(async () => ({ sw: !!(await navigator.serviceWorker.getRegistration()), manifest: (await fetch('manifest.webmanifest')).ok }));
+    expect(pwa.sw && pwa.manifest, 'manifest served and service worker registered');
 
     // Blocked user cannot sign in
     await login('creator', 'creator-pass-1');

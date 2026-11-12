@@ -230,3 +230,11 @@ The owner decided to stop using WeWeb. The app is rebuilt as a static site in th
 - `app/`: Preact + htm without a build step, hash routes (`#/boss/lessons`), same pages and design system as the WeWeb version.
 - Tests: `supabase/test/run_tests.sh` (92 database checks on local Postgres with Supabase stand-ins) and `supabase/test/e2e.cjs` (browser run of the whole flow against the real SQL through `local_api.cjs`, screenshots at 1280 and 375 px, no sideways scrolling).
 - The WeWeb project stays until the owner confirms the new version works, then it is deleted.
+
+## Improvements (12 Nov 2026)
+
+Owner picked: edit/cancel lessons, score drafts, My account, delete accounts, install on phone, next lesson card, analytics, student feedback by QR, methods quiz, and creator "View as".
+- Database: `trial_lessons.status` adds `cancelled` (+ `cancel_reason`, `feedback_token`); new tables `student_feedback`, `quiz_questions` (8 starter questions), `quiz_attempts`; new functions `boss_update_lesson`, `boss_cancel_lesson`, `boss_remove_observer`, `me_change_password`, `me_set_telegram`, `creator_delete_user`, `feedback_form` / `feedback_submit` (callable without signing in), `boss_quiz`, `boss_save_quiz_question`, `boss_delete_quiz_question`, `candidate_quiz`, `candidate_submit_quiz`, `boss_analytics`.
+- View as: the app sends header `x-view-as`; `_auth()` answers as that person only when the real caller is the creator; every changing function uses `_auth_write()`, which refuses with `PREVIEW_READ_ONLY`. Supabase's API allows the header (checked on the live project).
+- Score drafts live in the browser (`localStorage`, per assignment) until submitted.
+- Tests: 138 database checks; browser run covers every new feature (QR feedback as an anonymous student, move/cancel/remove observer, draft restore after reload, quiz, analytics, password change, View as, delete account, service worker).

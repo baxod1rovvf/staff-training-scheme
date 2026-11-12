@@ -243,4 +243,97 @@ select pg_temp.expect_error($$select public.setup_first_creator('a','b','ccccccc
 select pg_temp.check((select count(*) from public.profiles) = 0 and (select count(*) from public.scores) = 0, 'tables return no rows directly (RLS)');
 reset role;
 
+
+-- 16. Creator "View as" (read-only)
+select pg_temp.as_user('creator');
+select set_config('request.headers', json_build_object('x-view-as', (select id from public.profiles where login='toxirjon'))::text, false);
+select pg_temp.check(public.me()->>'login' = 'toxirjon', 'creator views the site as a teacher');
+select pg_temp.check(jsonb_typeof(public.teacher_my_work()->'assignments') = 'array', 'teacher pages load in view-as');
+select pg_temp.expect_error($$select public.me_set_telegram('12345')$$, 'PREVIEW_READ_ONLY');
+select pg_temp.expect_error($$select public.creator_list_users()$$, 'FORBIDDEN');
+select pg_temp.as_user('jasurbek');
+select pg_temp.expect_error($$select public.me()$$, 'FORBIDDEN');
+select set_config('request.headers', '{}', false);
+
+-- 17. Change, move, cancel a lesson; remove an observer
+select pg_temp.as_user('jasurbek');
+select public.creator_create_user('Teacher Four', 'teach4', 'teacher-4-pass', 'teacher') from (select pg_temp.as_user('creator')) x;
+select pg_temp.as_user('jasurbek');
+create temp table l4 as select (public.boss_schedule_lesson((select id from public.profiles where login='cand1'), 'micro', '2026-12-05T09:00:00Z', 'A1', '',
+  array[(select id from public.profiles where login='toxirjon'), (select id from public.profiles where login='teacher.two'), (select id from public.profiles where login='teach4')])->>'lesson_id')::uuid as id;
+truncate net.calls;
+select pg_temp.check((public.boss_update_lesson((select id from l4), '2026-12-06T10:00:00Z', 'A2', 'Travel')->>'moved')::boolean, 'lesson moved');
+select pg_temp.check((select count(*) from net.calls) = 1 and (select body->>'text' like 'Lesson moved:%' from net.calls limit 1), 'observers told about the move');
+select pg_temp.check((select group_name = 'A2' and topic = 'Travel' from public.trial_lessons where id = (select id from l4)), 'group and topic changed');
+select public.boss_remove_observer((select a.id from public.observer_assignments a join public.profiles p on p.id = a.observer_id where a.lesson_id = (select id from l4) and p.login = 'teach4'));
+select pg_temp.check((select count(*) from public.observer_assignments where lesson_id = (select id from l4)) = 2, 'observer removed');
+select pg_temp.check(public.boss_cancel_lesson((select id from l4), 'Candidate is ill')->>'ok' = 'true', 'lesson cancelled');
+select pg_temp.expect_error(format($$select public.boss_cancel_lesson(%L, '')$$, (select id from l4)), 'LESSON_CANCELLED');
+select pg_temp.expect_error(format($$select public.boss_update_lesson(%L, '2026-12-07T10:00:00Z', '', '')$$, (select id from l4)), 'LESSON_CANCELLED');
+select pg_temp.expect_error(format($$select public.boss_cancel_lesson(%L, '')$$, (select id from l1)), 'ALREADY_DECIDED');
+select pg_temp.check((select status from public.trial_lessons where id = (select id from l4)) = 'cancelled', 'status cancelled');
+select pg_temp.as_user('toxirjon');
+select pg_temp.check(not exists (select 1 from jsonb_array_elements(public.teacher_my_work()->'assignments') x where (x->>'lesson_id')::uuid = (select id from l4)), 'cancelled lesson hidden from teacher');
+select pg_temp.expect_error(format($$select public.teacher_submit_scores((select a.id from public.observer_assignments a join public.profiles p on p.id = a.observer_id where a.lesson_id = %L and p.login = 'toxirjon'), (select jsonb_agg(jsonb_build_object('criterion_id', id, 'band', 7)) from public.criteria where rubric_version_id = (select rubric_version_id from public.trial_lessons where id = %L)))$$, (select id from l4), (select id from l4)), 'LESSON_CANCELLED');
+select pg_temp.as_user('cand1');
+select pg_temp.check(not exists (select 1 from jsonb_array_elements(public.candidate_my_results()->'lessons') x where (x->>'lesson_id')::uuid = (select id from l4)), 'cancelled lesson hidden from candidate');
+
+-- 18. My account
+select pg_temp.as_user('toxirjon');
+select pg_temp.expect_error($$select public.me_change_password('wrong-pass', 'new-pass-123')$$, 'WRONG_PASSWORD');
+select pg_temp.expect_error($$select public.me_change_password('22222222', 'short')$$, 'PASSWORD_TOO_SHORT');
+select public.me_change_password('22222222', 'new-pass-123');
+select pg_temp.check((select encrypted_password = extensions.crypt('new-pass-123', encrypted_password) from auth.users where id = (select id from public.profiles where login='toxirjon')), 'own password changed');
+select pg_temp.expect_error($$select public.me_set_telegram('abc')$$, 'INVALID_CHAT_ID');
+select pg_temp.check(public.me_set_telegram(' 55501234 ')->>'telegram_chat_id' = '55501234', 'own Telegram chat id saved');
+
+-- 19. Delete accounts
+select pg_temp.as_user('creator');
+select pg_temp.expect_error($$select public.creator_delete_user((select id from public.profiles where login='toxirjon'))$$, 'HAS_HISTORY');
+select pg_temp.expect_error($$select public.creator_delete_user((select id from public.profiles where login='creator'))$$, 'CANNOT_DELETE_SELF');
+select public.creator_create_user('Typo Account', 'typo.account', 'typo-pass-1', 'teacher');
+select pg_temp.check(public.creator_delete_user((select id from public.profiles where login='typo.account'))->>'ok' = 'true', 'account without history deleted');
+select pg_temp.check(not exists (select 1 from auth.users where email = 'typo.account@users.edunest.local'), 'login removed too');
+
+-- 20. Student feedback (anonymous)
+reset role;
+select pg_temp.check((select feedback_token from public.trial_lessons where id = (select id from l1)) ~ '^[0-9a-f]{18}$', 'lesson has a feedback token');
+grant usage on schema public to anon;
+create temp table tok as select feedback_token t from public.trial_lessons where id = (select id from l1);
+grant select on tok to anon;
+select set_config('test.uid', '', false);
+set role anon;
+select pg_temp.check((public.feedback_form((select t from tok))->>'teacher') = 'Cand', 'feedback form shows only the first name');
+select public.feedback_submit((select t from tok), 5, 4, 3, 5, 'Fun lesson!');
+select public.feedback_submit((select t from tok), 4, 4, 4, 4, '');
+select pg_temp.expect_error($$select public.feedback_submit((select t from tok), 6, 4, 4, 4, '')$$, 'FEEDBACK_INCOMPLETE');
+select pg_temp.expect_error($$select public.feedback_submit('nope', 4, 4, 4, 4, '')$$, 'FEEDBACK_NOT_FOUND');
+select pg_temp.expect_error($$select public.boss_dashboard()$$, 'permission denied for function boss_dashboard');
+reset role;
+select pg_temp.as_user('jasurbek');
+select pg_temp.check((select (j->'student_feedback'->>'count')::int = 2 and (j->'student_feedback'->>'understood')::numeric = 4.5 from (select public.boss_get_lesson((select id from l1)) j) x), 'boss sees feedback averages');
+select pg_temp.as_user('cand1');
+select pg_temp.check((select (x->'student_feedback'->>'count')::int = 2 from jsonb_array_elements(public.candidate_my_results()->'lessons') x where (x->>'lesson_id')::uuid = (select id from l1)), 'candidate sees feedback after the decision');
+
+-- 21. Methods quiz
+select pg_temp.as_user('cand1');
+select pg_temp.check((select jsonb_array_length(q->'questions') = 8 and not (q->'questions'->0 ? 'correct_index') from (select public.candidate_quiz() q) x), 'candidate gets 8 questions without answers');
+select pg_temp.expect_error($$select public.candidate_submit_quiz('{}'::jsonb)$$, 'QUIZ_INCOMPLETE');
+select pg_temp.check((select (r->>'score')::int = 8 and (r->>'total')::int = 8 from (select public.candidate_submit_quiz((select jsonb_object_agg(id::text, correct_index) from public.quiz_questions)) r) x), 'all correct → 8/8');
+select pg_temp.check((select (r->>'score')::int = 0 from (select public.candidate_submit_quiz((select jsonb_object_agg(id::text, (correct_index + 1) % 4) from public.quiz_questions)) r) x), 'all wrong → 0/8 with explanations');
+select pg_temp.as_user('jasurbek');
+select pg_temp.check((select (c->>'attempts')::int = 2 and (c->>'best')::int = 100 from jsonb_array_elements(public.boss_quiz()->'candidates') c), 'boss sees quiz attempts');
+select pg_temp.expect_error($$select public.boss_save_quiz_question(null, 'Q?', '["only one"]', 0)$$, 'OPTIONS_COUNT');
+select pg_temp.expect_error($$select public.boss_save_quiz_question(null, 'Q?', '["a","b"]', 5)$$, 'CORRECT_REQUIRED');
+create temp table qq as select (public.boss_save_quiz_question(null, 'What is an ICQ?', '["Instruction-check question","Ice cream question"]', 0, 'Checks instructions.')->>'id')::uuid id;
+select pg_temp.check(public.boss_delete_quiz_question((select id from qq))->>'ok' = 'true', 'quiz question added and deleted');
+select pg_temp.check(jsonb_array_length(public.boss_get_candidate((select id from public.profiles where login='cand1'))->'quiz') = 2, 'quiz attempts on the candidate page');
+
+-- 22. Analytics
+create temp table an as select public.boss_analytics() j;
+select pg_temp.check((select (j->'outcomes'->>'approved')::int = 1 and (j->'outcomes'->>'declined')::int = 1 and (j->'outcomes'->>'cancelled')::int = 1 from an), 'outcome counts');
+select pg_temp.check((select j->'criteria'->0->>'name' = 'Preparation' or jsonb_array_length(j->'criteria') = 11 from an), 'criteria sorted weakest first');
+select pg_temp.check((select jsonb_array_length(j->'observers') = 2 and jsonb_array_length(j->'time_to_approval') = 1 from an), 'observer generosity and time to approval');
+select pg_temp.check((select (j->'quiz'->>'attempts')::int = 2 and (j->'student_feedback'->>'answers')::int = 2 from an), 'quiz and student feedback totals');
+
 \echo ALL TESTS PASSED

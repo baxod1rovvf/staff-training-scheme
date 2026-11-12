@@ -1,7 +1,7 @@
 import { html, useState, Button, Icon, PageHeader, CardHead, Loader, Empty, Badge, StageBadge, Chips, Field, SlideOver, Dialog, ErrorBox,
   Person, LessonRow, BandPicker, useLoad, useAction, toast } from '../ui.js';
 import { rpc, fileUrl, uploadMaterial, removeMaterialFile } from '../api.js';
-import { STAGES, stageLabel, TYPES, typeLabel, typeIcon, LEVELS, fmtDate, fmtDateTime, band1, lessonType } from '../util.js';
+import { STAGES, stageLabel, TYPES, typeLabel, typeIcon, LEVELS, fmtDate, fmtDateTime, band1, bandColor, lessonType } from '../util.js';
 
 // ---------------------------------------------------------------- Dashboard
 export function BossDashboard() {
@@ -112,6 +112,9 @@ export function BossCandidate({ params }) {
           <select class="input" aria-label="Mentor" value=${c.mentor_id || ''} disabled=${busy} onChange=${e => setMentor(e.target.value)}>
             <option value="">No mentor</option>${(teachers.data || []).map(t => html`<option value=${t.id}>${t.name}</option>`)}</select>
           <p class="hint">The mentor reads this candidate's journal and cannot observe their lessons.</p></div>
+        <div class="card"><${CardHead} icon="list-checks" title="Methods quiz" />
+          ${d.data.quiz.length ? html`<div class="stack sm">${d.data.quiz.slice(0, 5).map(a => html`<div class="row-flex"><span class="spacer muted">${fmtDate(a.created_at)}</span><span class="strong">${a.score} / ${a.total}</span></div>`)}</div>`
+            : html`<p class="muted">Not taken yet.</p>`}</div>
       </div>
     </div>
     ${schedule ? html`<${ScheduleForm} candidateId=${c.id} onClose=${() => setSchedule(false)} onSaved=${() => { setSchedule(false); d.reload(); }} />` : null}`;
@@ -360,6 +363,110 @@ function CalibrationForm({ form, criteria, onClose, onSaved }) {
       ${criteria.map(c => html`<div class="stack sm" style="gap:4px"><span>${c.sort_order}. ${c.name}</span>
         <${BandPicker} label=${c.name} value=${f.reference_bands[c.id]} onChange=${n => setBand(c.id, n)} /></div>`)}</div>
     ${missing.length && error ? html`<p class="hint">Still missing: ${missing.map(c => c.name).join(', ')}.</p>` : null}
+    <${ErrorBox} error=${error} />
+  </${SlideOver}>`;
+}
+
+// ---------------------------------------------------------------- Analytics
+const pct = (a, b) => (b ? Math.round(100 * a / b) + '%' : '—');
+export function BossAnalytics() {
+  const a = useLoad(() => rpc('boss_analytics'));
+  if (a.loading && !a.data) return html`<${Loader} />`;
+  if (a.error) return html`<${ErrorBox} error=${a.error} />`;
+  const x = a.data; const o = x.outcomes;
+  const stat = (label, value, sub, icon) => html`<div class="card" style="padding:var(--md)"><div class="row-flex"><${Icon} name=${icon} color="var(--indigo)" /><span class="caption">${label}</span></div>
+    <span class="stat">${value}</span>${sub ? html`<span class="caption">${sub}</span>` : null}</div>`;
+  const avgDays = x.time_to_approval.length ? Math.round(x.time_to_approval.reduce((s, r) => s + r.days, 0) / x.time_to_approval.length) : null;
+  return html`
+    <${PageHeader} title="Analytics" subtitle="How candidates and observers are doing, across all lessons so far." />
+    <div class="grid c4">
+      ${stat('Lessons decided', o.decided, `${o.open} still open · ${o.cancelled} cancelled`, 'calendar-check')}
+      ${stat('Approved', pct(o.approved, o.decided), `full lessons ${pct(o.full_approved, o.full_decided)} · micro ${pct(o.micro_approved, o.micro_decided)}`, 'circle-check')}
+      ${stat('Days to approval', avgDays == null ? '—' : avgDays, 'from first lesson to approved full lesson', 'hourglass')}
+      ${stat('Calibration', x.calibration.avg_latest == null ? '—' : x.calibration.avg_latest + '%', `average latest accuracy · ${x.calibration.teachers} teachers`, 'target')}
+    </div>
+    <div class="split">
+      <div class="card"><${CardHead} icon="scale" title="Criteria, weakest first" />
+        ${x.criteria.length ? html`<div class="stack sm">${x.criteria.map(c => html`<div class="stack sm" style="gap:4px">
+            <div class="row-flex"><span class="spacer">${c.name}${c.must_pass ? html` <${Badge} kind="warning">Must pass</${Badge}>` : null}</span><span class="strong" style=${{ color: bandColor(c.avg_band) }}>${band1(c.avg_band)}</span></div>
+            <div class="bar"><i style=${{ width: (Number(c.avg_band) / 9 * 100) + '%', background: bandColor(c.avg_band) }}></i></div></div>`)}
+            <p class="hint">Average band over all decided lessons. The top ones are where candidates need the most training.</p></div>`
+          : html`<${Empty} icon="scale" title="No decided lessons yet" text="Numbers appear after the first decision." />`}</div>
+      <div class="stack">
+        <div class="card"><${CardHead} icon="users" title="Observers compared with the team" />
+          ${x.observers.length ? html`<div class="stack sm">${x.observers.map(r => { const v = Number(r.vs_team); return html`<div class="row-flex">
+              <span class="spacer">${r.name}<br/><span class="caption">${r.lessons} lesson${r.lessons === 1 ? '' : 's'} · average ${band1(r.avg_band)}</span></span>
+              <span class="strong" style=${{ color: Math.abs(v) >= 1 ? 'var(--ro)' : Math.abs(v) >= 0.5 ? 'var(--am)' : 'var(--em)' }}>${v > 0 ? '+' : ''}${v.toFixed(2)}</span></div>`; })}
+              <p class="hint">Bands above (+) or below (−) the other observers of the same lessons. Around 0 is ideal; ±1 or more is worth a calibration session.</p></div>`
+            : html`<p class="muted">Appears when lessons have at least 2 submitted observers.</p>`}</div>
+        <div class="card"><${CardHead} icon="graduation-cap" title="Time to approval" />
+          ${x.time_to_approval.length ? html`<div class="stack sm">${x.time_to_approval.map(r => html`<div class="row-flex"><span class="spacer">${r.name}</span><span class="strong">${r.days} day${r.days === 1 ? '' : 's'}</span></div>`)}</div>`
+            : html`<p class="muted">No approved full trial lessons yet.</p>`}</div>
+        <div class="card"><${CardHead} icon="message-square" title="Students and quiz" />
+          <div class="row-flex"><span class="spacer">Student answers</span><span class="strong">${x.student_feedback.answers}</span></div>
+          ${x.student_feedback.answers ? html`<div class="row-flex"><span class="spacer muted">Understood / clear / spoke / enjoyed</span><span class="strong">${x.student_feedback.understood} · ${x.student_feedback.clear} · ${x.student_feedback.spoke} · ${x.student_feedback.enjoyed}</span></div>` : null}
+          <div class="row-flex"><span class="spacer">Quiz attempts</span><span class="strong">${x.quiz.attempts}${x.quiz.attempts ? ' · average ' + x.quiz.avg_percent + '%' : ''}</span></div></div>
+      </div>
+    </div>`;
+}
+
+// ---------------------------------------------------------------- Methods quiz (boss)
+export function BossQuiz() {
+  const q = useLoad(() => rpc('boss_quiz'));
+  const [form, setForm] = useState(null);
+  const [del, setDel] = useState(null);
+  const [run, busy, error] = useAction();
+  if (q.loading && !q.data) return html`<${Loader} />`;
+  if (q.error) return html`<${ErrorBox} error=${q.error} />`;
+  const remove = () => run(async () => { await rpc('boss_delete_quiz_question', { p_id: del.id }); setDel(null); q.reload(); toast('Question deleted'); });
+  return html`
+    <${PageHeader} title="Methods quiz" subtitle="Questions candidates answer to check their knowledge of teaching methods. They see the right answer and your explanation after submitting.">
+      <${Button} icon="plus" onClick=${() => setForm({ id: null, question: '', options: ['', '', ''], correct_index: null, explanation: '', is_active: true })}>Add question</${Button}>
+    </${PageHeader}>
+    <div class="split">
+      <div class="stack">${q.data.questions.length ? q.data.questions.map((x, i) => html`<div class="card">
+          <div class="row-flex"><span class="strong spacer">${i + 1}. ${x.question}</span>${x.is_active ? null : html`<${Badge}>Hidden</${Badge}>`}
+            <${Button} kind="ghost" small icon="pencil" onClick=${() => setForm({ ...x, explanation: x.explanation || '' })}>Edit</${Button}>
+            <${Button} kind="ghost" small icon="trash-2" onClick=${() => setDel(x)}>Delete</${Button}></div>
+          <div class="stack sm" style="gap:4px">${x.options.map((o, k) => html`<span class=${k === x.correct_index ? 'ok strong' : 'muted'}>${k === x.correct_index ? '✓ ' : '• '}${o}</span>`)}</div>
+          ${x.explanation ? html`<p class="caption">${x.explanation}</p>` : null}</div>`)
+        : html`<div class="card"><${Empty} icon="list-checks" title="No questions yet" text="Add the first question." /></div>`}</div>
+      <div class="card flush"><${CardHead} icon="users" title="Candidates' results" />
+        ${q.data.candidates.length ? html`<div class="list">${q.data.candidates.map(c => html`<a class="list-row" href=${'#/boss/candidate/' + c.id}>
+          <div class="grow"><span class="strong">${c.name}</span><span class="caption">${c.attempts} attempt${c.attempts === 1 ? '' : 's'} · best ${c.best}%</span></div>
+          <span class="strong">${c.latest_score} / ${c.latest_total}</span></a>`)}</div>`
+          : html`<${Empty} icon="list-checks" title="Nobody has taken it yet" text="Candidates find the quiz on their My progress page." />`}</div>
+    </div>
+    ${form ? html`<${QuizForm} form=${form} onClose=${() => setForm(null)} onSaved=${() => { setForm(null); q.reload(); }} />` : null}
+    ${del ? html`<${Dialog} title="Delete this question?" onClose=${() => setDel(null)}
+      footer=${html`<${Button} kind="secondary" onClick=${() => setDel(null)}>Cancel</${Button}><${Button} kind="danger" busy=${busy} onClick=${remove}>Delete question</${Button}>`}>
+      <p class="muted">${del.question}</p><p class="muted">Past attempts keep their scores. To keep it for later, edit it and untick “Visible to candidates” instead.</p>
+      <${ErrorBox} error=${error} /></${Dialog}>` : null}`;
+}
+
+function QuizForm({ form, onClose, onSaved }) {
+  const [f, setF] = useState({ ...form, options: [...form.options] });
+  const [run, busy, error] = useAction();
+  const setOpt = (k, v) => { const o = [...f.options]; o[k] = v; setF({ ...f, options: o }); };
+  const removeOpt = k => setF({ ...f, options: f.options.filter((_, j) => j !== k), correct_index: f.correct_index === k ? null : f.correct_index > k ? f.correct_index - 1 : f.correct_index });
+  const save = () => run(async () => {
+    // Empty options are dropped; keep the right answer pointing at the same text
+    const kept = f.options.map((o, k) => [o.trim(), k]).filter(([o]) => o);
+    const correct = kept.findIndex(([, k]) => k === f.correct_index);
+    await rpc('boss_save_quiz_question', { p_id: f.id, p_question: f.question, p_options: kept.map(([o]) => o), p_correct_index: correct < 0 ? null : correct, p_explanation: f.explanation, p_is_active: f.is_active });
+    toast(f.id ? 'Question saved' : 'Question added'); onSaved();
+  });
+  return html`<${SlideOver} title=${f.id ? 'Edit question' : 'Add question'} onClose=${onClose}
+    footer=${html`<${Button} kind="secondary" onClick=${onClose}>Cancel</${Button}><${Button} busy=${busy} onClick=${save}>Save</${Button}>`}>
+    <${Field} label="Question" id="q-q"><textarea id="q-q" class="input" rows="2" value=${f.question} onInput=${e => setF({ ...f, question: e.target.value })}></textarea></${Field}>
+    <div class="stack sm"><span class="label">Answers (tick the right one)</span>
+      ${f.options.map((o, k) => html`<div class="row-flex" style="flex-wrap:nowrap">
+        <input type="radio" name="correct" aria-label=${'Answer ' + (k + 1) + ' is right'} checked=${f.correct_index === k} onChange=${() => setF({ ...f, correct_index: k })} style="width:18px;height:18px;accent-color:var(--indigo)" />
+        <input class="input" aria-label=${'Answer ' + (k + 1)} value=${o} onInput=${e => setOpt(k, e.target.value)} />
+        ${f.options.length > 2 ? html`<${Button} kind="ghost" small icon="x" title="Remove answer" onClick=${() => removeOpt(k)}></${Button}>` : null}</div>`)}
+      ${f.options.length < 6 ? html`<div><${Button} kind="secondary" small icon="plus" onClick=${() => setF({ ...f, options: [...f.options, ''] })}>Add answer</${Button}></div>` : null}</div>
+    <${Field} label="Explanation (shown after answering)" id="q-e"><textarea id="q-e" class="input" rows="3" value=${f.explanation} onInput=${e => setF({ ...f, explanation: e.target.value })}></textarea></${Field}>
+    <label class="check"><input type="checkbox" checked=${f.is_active} onChange=${e => setF({ ...f, is_active: e.target.checked })} />Visible to candidates</label>
     <${ErrorBox} error=${error} />
   </${SlideOver}>`;
 }

@@ -27,7 +27,7 @@ const pgValue = v => (v === null || v === undefined ? null
   : Array.isArray(v) && v.every(x => x === null || typeof x !== 'object') ? '{' + v.map(x => '"' + x + '"').join(',') + '}'
   : typeof v === 'object' ? JSON.stringify(v) : String(v));
 
-async function rpc(name, args, uid) {
+async function rpc(name, args, uid, headers = {}) {
   if (!/^[a-z][a-z0-9_]*$/.test(name) || name.startsWith('_') || name === 'setup_first_creator') return [404, { message: 'not found' }];
   const keys = Object.keys(args || {});
   const sql = `select public.${name}(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')}) as r`;
@@ -35,6 +35,7 @@ async function rpc(name, args, uid) {
   try {
     await client.query('begin');
     await client.query("select set_config('test.uid', $1, true)", [uid]);
+    await client.query("select set_config('request.headers', $1, true)", [JSON.stringify(headers)]);
     const r = await client.query(sql, keys.map(k => pgValue(args[k])));
     await client.query('commit');
     return [200, r.rows[0].r];
@@ -65,7 +66,7 @@ http.createServer(async (req, res) => {
       return res.end(`window.EDUNEST_CONFIG = { supabaseUrl: 'http://localhost:${PORT}', supabaseAnonKey: 'local-anon-key' };`);
     }
     if (url.pathname.startsWith('/rest/v1/rpc/')) {
-      const [s, b] = await rpc(url.pathname.slice(13), JSON.parse((await readBody(req)).toString() || '{}'), userFromToken(req));
+      const [s, b] = await rpc(url.pathname.slice(13), JSON.parse((await readBody(req)).toString() || '{}'), userFromToken(req), req.headers);
       return send(res, s, b);
     }
     if (url.pathname === '/auth/v1/token') { const [s, b] = await signIn(await readBody(req)); return send(res, s, b); }

@@ -14,10 +14,13 @@ like IELTS). The app works out the result, and the boss makes the decision.
 
 | Role | What they do |
 |---|---|
-| Creator | Creates and edits every account (full name, login, password, role, status, Telegram chat id, mentor), sets new passwords, blocks and unblocks. Nobody can sign up. |
-| Boss | Dashboard, candidates and stages, mentor choice, lesson standard editor (versioned), materials, schedules lessons and observers, decides, prints reports, calibration lessons, Telegram reminders. |
-| Teacher | Scores the lessons they observe (never sees other observers' scores), practises on calibration lessons, reads the journals of the candidates they mentor. |
-| Candidate | Sees their stage, their results (bands, comments and the boss's note, never observer names), lesson materials, and writes a shadowing journal. |
+| Creator | Creates, edits, blocks and deletes accounts (full name, login, password, role, status, Telegram chat id, mentor); sets new passwords. Can **view the site as** any boss, teacher or candidate (read-only) from the sidebar. Nobody can sign up. |
+| Boss | Dashboard, candidates and stages, mentor choice, schedules lessons and observers, edits, moves or cancels lessons, removes observers, decides, prints reports, student feedback QR codes, analytics, lesson standard (versioned), materials, calibration lessons, methods quiz, Telegram reminders. |
+| Teacher | Scores the lessons they observe (never sees other observers' scores; unsent scores are kept as a draft on the device), practises on calibration lessons, reads the journals of the candidates they mentor. |
+| Candidate | Sees their stage and next lesson, their results (bands, comments, the boss's note and student feedback, never observer names), lesson materials, the methods quiz, and writes a shadowing journal. |
+| Students | Open the QR code shown at the end of a trial lesson and answer 4 quick questions anonymously, without an account. |
+
+Every role has **My account**: change your own password, set your Telegram chat id, and install the app on your phone.
 
 Everyone signs in with **login + password**. Supabase needs an email, so the login `ali` is stored as `ali@users.edunest.local`; people never see it.
 
@@ -52,7 +55,7 @@ Without a token or chat id the app works normally; messages are just skipped and
 
 ### Updating the database later
 
-When a change needs the database too, run the new `supabase/schema.sql` again in the SQL Editor. It keeps all data and only updates the functions.
+When a change needs the database too, run the new `supabase/schema.sql` again in the SQL Editor (copy all, paste, Run). It keeps all data, adds any new tables and columns, and updates the functions. The site and the database must be updated together: after "merge it", run the file once.
 
 ## Rules
 
@@ -66,6 +69,10 @@ When a change needs the database too, run the new `supabase/schema.sql` again in
 - Stages: Shadowing → Micro-teaching → Full trial → Decision → Probation → Certified (or Declined).
 - The standard is versioned. A lesson keeps the version it was scheduled with.
 - Calibration accuracy: 0 bands away on average = 100%, 8 bands away = 0%. 85% or more = scores like the team.
+- A lesson can be edited or cancelled until it is decided. Cancelled lessons stay in the list but nobody can score them; teachers and the candidate no longer see them.
+- An account can be deleted only if the person has no lessons, scores, decisions, journal entries or attempts; otherwise it is blocked, so the records stay.
+- Student feedback is open from one day before to 14 days after the lesson (at most 80 answers). Students answer from 1 to 5: understood the lesson, the teacher explained clearly, I spoke a lot, I enjoyed it.
+- "View as" is read-only: the database refuses every change while the creator is looking at someone else's pages.
 
 ## Files
 
@@ -74,9 +81,10 @@ When a change needs the database too, run the new `supabase/schema.sql` again in
 | `index.html`, `config.js` | The website entry and the Supabase connection |
 | `app/` | The app: `main.js` (sign-in, navigation), `api.js` (database calls, error texts), `ui.js` (shared parts), `pages/` (one file per role area) |
 | `assets/app.css` | Design system: Inter, indigo accent, cards, chips, band buttons |
-| `assets/vendor/` | Preact + htm 3.1.1 and supabase-js 2.45.4, stored here so the site needs no other server |
+| `assets/vendor/` | Preact + htm 3.1.1, supabase-js 2.45.4 and qrcode-generator 1.4.4 (MIT), stored here so the site needs no other server |
+| `manifest.webmanifest`, `sw.js`, `assets/icons/` | Install on the phone; the service worker always prefers the newest files |
 | `supabase/schema.sql` | Tables, the standard v1, every rule and role check, file storage |
-| `supabase/test/` | Tests: `run_tests.sh` (92 database checks), `local_api.cjs` + `e2e.cjs` (the whole flow in a browser) |
+| `supabase/test/` | Tests: `run_tests.sh` (138 database checks), `local_api.cjs` + `e2e.cjs` (the whole flow and every feature in a browser) |
 | `docs/` | Original design spec, plan and the WeWeb build history |
 
 ## How it is protected
@@ -100,5 +108,6 @@ node supabase/test/e2e.cjs /tmp/shots
 
 ## Roadmap
 
-- **Phase 2:** short feedback from students, a teaching-methods quiz, video upload, observer rewards in diamonds, analytics (time to "ready", weakest criteria), regular observation of current teachers, daily automatic reminders (Supabase cron).
+- **Next:** daily automatic reminders (Supabase cron), more Telegram messages (day-before reminder, "your result is ready"), Uzbek and Russian, calendar view, Excel export.
+- **Phase 2:** video upload, observer rewards in diamonds, certificate PDF, probation goals with the mentor, regular observation of current teachers.
 - **Phase 3:** move into the main Edunest system; a paid "Edunest Teacher Course" for teachers from outside.
