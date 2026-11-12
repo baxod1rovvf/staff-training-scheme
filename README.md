@@ -63,8 +63,8 @@ When a change needs the database too, run the new `supabase/schema.sql` again in
 - **Overall band** = average of the 10 criterion bands, rounded like IELTS (below .25 rounds down, .25–.74 becomes .5, .75 or more rounds up).
 - **Ready** when the overall band is 6.0 or more, every must-pass criterion (Preparation, Clear instructions, Accurate English model, Classroom management and pace) is 6.0 or more, and no criterion is below 4.0.
 - **Disagreement** when two observers are 3 or more bands apart on a criterion. The boss can add another observer.
-- A lesson has 2–3 observers. The candidate's mentor cannot observe their lessons.
-- The boss can decide only after **at least 2 observers** have submitted. Going against the calculated result needs a note. A decision cannot be changed.
+- A lesson has 1–3 observers. The candidate's mentor cannot observe their lessons. The last observer cannot be removed.
+- The boss can decide once **2 observers** have submitted, or **1** when only one teacher observes the lesson. Going against the calculated result needs a note. A decision cannot be changed.
 - Approving a **full** trial lesson moves the candidate to **Probation**. Other stage changes are made by the boss.
 - Stages: Shadowing → Micro-teaching → Full trial → Decision → Probation → Certified (or Declined).
 - The standard is versioned. A lesson keeps the version it was scheduled with.
@@ -84,7 +84,7 @@ When a change needs the database too, run the new `supabase/schema.sql` again in
 | `assets/vendor/` | Preact + htm 3.1.1, supabase-js 2.45.4 and qrcode-generator 1.4.4 (MIT), stored here so the site needs no other server |
 | `manifest.webmanifest`, `sw.js`, `assets/icons/` | Install on the phone; the service worker always prefers the newest files |
 | `supabase/schema.sql` | Tables, the standard v1, every rule and role check, file storage |
-| `supabase/test/` | Tests: `run_tests.sh` (138 database checks), `local_api.cjs` + `e2e.cjs` (the whole flow and every feature in a browser) |
+| `supabase/test/` | Tests: `run_tests.sh` (143 database checks), `local_api.cjs` + `e2e.cjs` (the whole flow and every feature in a browser) |
 | `docs/` | Original design spec, plan and the WeWeb build history |
 
 ## How it is protected

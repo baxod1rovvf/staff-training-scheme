@@ -6,7 +6,7 @@ import { FB_QUESTIONS } from './lesson.js';
 
 const EXPECT = {
   micro: 'Teach a short part of a lesson (about 15–20 minutes). Bring a plan with the aim, the stages and their timings, and all your materials.',
-  full: 'Teach a full lesson. Bring a written plan (aim, stages, timings) and all materials. 2–3 observers score it with the Edunest lesson standard.'
+  full: 'Teach a full lesson. Bring a written plan (aim, stages, timings) and all materials. Observers score it with the Edunest lesson standard.'
 };
 function NextLesson({ lessons }) {
   const now = Date.now() - 2 * 3600 * 1000;

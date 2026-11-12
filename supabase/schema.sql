@@ -393,15 +393,23 @@ begin
     'none_below_4', v_complete and coalesce(v_none4, false),
     'recommendation', case when v_complete and v_overall >= 6 and v_must and coalesce(v_none4, false) then 'ready' else 'not_ready' end,
     'submitted_count', v_submitted,
+    'needed_count', public._scores_needed(p_lesson_id),
     'disagreements', coalesce((select jsonb_agg(x->>'name') from jsonb_array_elements(v_rows) x where (x->>'disagreement')::boolean), '[]'::jsonb)
   );
 end $$;
+
+-- How many submitted observers a lesson needs before the boss can decide:
+-- 2, or 1 when only one teacher observes it
+create or replace function public._scores_needed(p_lesson_id uuid)
+returns int language sql stable security definer set search_path = public as $$
+  select greatest(1, least(2, (select count(*)::int from public.observer_assignments where lesson_id = p_lesson_id)));
+$$;
 
 -- Lesson status follows the number of submitted observers (until it is decided)
 create or replace function public._refresh_lesson_status(p_lesson_id uuid)
 returns void language sql security definer set search_path = public as $$
   update public.trial_lessons set status = case
-      when (select count(*) from public.observer_assignments where lesson_id = p_lesson_id and submitted_at is not null) >= 2
+      when (select count(*) from public.observer_assignments where lesson_id = p_lesson_id and submitted_at is not null) >= public._scores_needed(p_lesson_id)
       then 'awaiting_decision' else 'scheduled' end
   where id = p_lesson_id and status in ('scheduled', 'awaiting_decision');
 $$;
@@ -663,7 +671,7 @@ begin
   select * into c from public.profiles where id = p_candidate_id;
   if not found or c.role <> 'candidate' then raise exception 'NOT_A_CANDIDATE'; end if;
   select array_agg(distinct x) into v_ids from unnest(coalesce(p_observer_ids, '{}')) x where x is not null;
-  if coalesce(cardinality(v_ids), 0) < 2 or cardinality(v_ids) > 3 then raise exception 'OBSERVERS_COUNT'; end if;
+  if coalesce(cardinality(v_ids), 0) < 1 or cardinality(v_ids) > 3 then raise exception 'OBSERVERS_COUNT'; end if;
   if exists (select 1 from unnest(v_ids) x left join public.profiles p on p.id = x
              where p.id is null or p.role <> 'teacher' or p.status <> 'active') then raise exception 'NOT_A_TEACHER'; end if;
   if c.mentor_id is not null and c.mentor_id = any (v_ids) then raise exception 'MENTOR_AS_OBSERVER'; end if;
@@ -763,7 +771,7 @@ begin
   if l.status = 'cancelled' then raise exception 'LESSON_CANCELLED'; end if;
   if p_outcome not in ('approved', 'declined') then raise exception 'INVALID_OUTCOME'; end if;
   r := public._lesson_result(l.id);
-  if (r->>'submitted_count')::int < 2 or r->'overall' = 'null'::jsonb then raise exception 'NOT_ENOUGH_SCORES'; end if;
+  if (r->>'submitted_count')::int < public._scores_needed(l.id) or r->'overall' = 'null'::jsonb then raise exception 'NOT_ENOUGH_SCORES'; end if;
   v_override := (p_outcome = 'approved' and r->>'recommendation' <> 'ready') or (p_outcome = 'declined' and r->>'recommendation' = 'ready');
   if v_override and v_note is null then raise exception 'NOTE_REQUIRED'; end if;
 
@@ -1219,6 +1227,7 @@ begin
   select status into v_status from public.trial_lessons where id = a.lesson_id;
   if v_status in ('approved', 'declined') then raise exception 'ALREADY_DECIDED'; end if;
   if v_status = 'cancelled' then raise exception 'LESSON_CANCELLED'; end if;
+  if (select count(*) from public.observer_assignments where lesson_id = a.lesson_id) <= 1 then raise exception 'LAST_OBSERVER'; end if;
   delete from public.observer_assignments where id = a.id;
   perform public._refresh_lesson_status(a.lesson_id);
   return jsonb_build_object('ok', true);

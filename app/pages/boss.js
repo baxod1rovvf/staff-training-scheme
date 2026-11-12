@@ -33,7 +33,7 @@ export function BossDashboard() {
       <div class="stack">
         <div class="card flush"><${CardHead} icon="hourglass" title="Awaiting your decision" />
           ${x.awaiting.length ? html`<div class="list">${x.awaiting.map(l => html`<${LessonRow} l=${l} href=${'#/boss/lesson/' + l.id} />`)}</div>`
-            : html`<${Empty} icon="circle-check" title="Nothing to decide" text="Lessons appear here when at least 2 observers have submitted their scores." />`}</div>
+            : html`<${Empty} icon="circle-check" title="Nothing to decide" text="Lessons appear here when the observers have submitted their scores." />`}</div>
         <div class="card flush"><${CardHead} icon="calendar" title="Being scored"><a class="back" href="#/boss/lessons">All lessons</a></${CardHead}>
           ${x.upcoming.length ? html`<div class="list">${x.upcoming.map(l => html`<${LessonRow} l=${l} href=${'#/boss/lesson/' + l.id} />`)}</div>`
             : html`<${Empty} icon="calendar-x" title="No lessons being scored" text="Schedule a micro-teaching or full trial lesson for a candidate." />`}</div>
@@ -134,7 +134,7 @@ export function BossLessons() {
   const [schedule, setSchedule] = useState(wantNew);
   const list = (lessons.data || []).filter(l => !filter || (filter === 'decided' ? ['approved', 'declined'].includes(l.status) : l.status === filter));
   return html`
-    <${PageHeader} title="Trial lessons" subtitle="Micro-teaching and full trial lessons. Each one is scored by 2–3 observers; you decide when at least 2 have submitted.">
+    <${PageHeader} title="Trial lessons" subtitle="Micro-teaching and full trial lessons. Each one is scored by 1–3 observers; you decide when 2 have submitted (or 1, if only one observes).">
       <${Button} icon="plus" onClick=${() => setSchedule(true)}>Schedule lesson</${Button}>
     </${PageHeader}>
     <${Chips} options=${[['', 'All'], ['scheduled', 'Being scored'], ['awaiting_decision', 'Awaiting decision'], ['decided', 'Decided']]} value=${filter} onChange=${setFilter} />
@@ -170,7 +170,7 @@ function ScheduleForm({ candidateId, onClose, onSaved }) {
     <${Field} label="Date and time" id="s-w"><input id="s-w" class="input" type="datetime-local" value=${f.when} onInput=${e => setF({ ...f, when: e.target.value })} /></${Field}>
     <div class="grid c2"><${Field} label="Group (optional)" id="s-g"><input id="s-g" class="input" value=${f.group} onInput=${e => setF({ ...f, group: e.target.value })} placeholder="e.g. Elementary 2" /></${Field}>
       <${Field} label="Topic (optional)" id="s-t"><input id="s-t" class="input" value=${f.topic} onInput=${e => setF({ ...f, topic: e.target.value })} placeholder="e.g. Past simple" /></${Field}></div>
-    <div class="field"><span class="label">Observers (${f.observers.length} of 2–3)</span>
+    <div class="field"><span class="label">Observers (${f.observers.length} chosen, 1–3)</span>
       ${teachers.loading && !teachers.data ? html`<${Loader} />` : html`<div class="chips">${(teachers.data || []).map(t => {
         const mentor = cand && cand.mentor_id === t.id;
         return html`<button type="button" class=${'chip' + (f.observers.includes(t.id) ? ' on' : '')} disabled=${mentor} aria-pressed=${f.observers.includes(t.id)}
@@ -398,7 +398,7 @@ export function BossAnalytics() {
               <span class="spacer">${r.name}<br/><span class="caption">${r.lessons} lesson${r.lessons === 1 ? '' : 's'} · average ${band1(r.avg_band)}</span></span>
               <span class="strong" style=${{ color: Math.abs(v) >= 1 ? 'var(--ro)' : Math.abs(v) >= 0.5 ? 'var(--am)' : 'var(--em)' }}>${v > 0 ? '+' : ''}${v.toFixed(2)}</span></div>`; })}
               <p class="hint">Bands above (+) or below (−) the other observers of the same lessons. Around 0 is ideal; ±1 or more is worth a calibration session.</p></div>`
-            : html`<p class="muted">Appears when lessons have at least 2 submitted observers.</p>`}</div>
+            : html`<p class="muted">Appears when a lesson has at least 2 observers who submitted.</p>`}</div>
         <div class="card"><${CardHead} icon="graduation-cap" title="Time to approval" />
           ${x.time_to_approval.length ? html`<div class="stack sm">${x.time_to_approval.map(r => html`<div class="row-flex"><span class="spacer">${r.name}</span><span class="strong">${r.days} day${r.days === 1 ? '' : 's'}</span></div>`)}</div>`
             : html`<p class="muted">No approved full trial lessons yet.</p>`}</div>

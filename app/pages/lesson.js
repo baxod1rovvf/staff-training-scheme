@@ -29,7 +29,7 @@ export function BossLesson({ params }) {
   const openDecide = () => {
     setError(null);
     if (!outcome) { setError('Choose Approve or Decline first.'); return; }
-    if (r.submitted_count < 2) { setError('At least 2 observers must submit their scores before deciding.'); return; }
+    if (r.submitted_count < r.needed_count) { setError(r.needed_count === 1 ? 'The observer must submit their scores before you decide.' : 'At least 2 observers must submit their scores before you decide.'); return; }
     if (override && !note.trim()) { setError('Please write a note: your decision differs from the calculated result.'); return; }
     setAsk(true);
   };
@@ -91,7 +91,7 @@ export function BossLesson({ params }) {
             <${Check} ok=${r.overall != null && r.overall >= 6} text="Overall band 6.0 or more" />
             <${Check} ok=${r.must_pass_ok} text="Every must-pass criterion 6.0 or more" />
             <${Check} ok=${r.none_below_4} text="No criterion below 4.0" />
-            <${Check} ok=${r.submitted_count >= 2} text=${`${r.submitted_count} of ${observers.length} observers submitted (2 needed)`} />
+            <${Check} ok=${r.submitted_count >= r.needed_count} text=${`${r.submitted_count} of ${observers.length} observer${observers.length === 1 ? '' : 's'} submitted (${r.needed_count} needed)`} />
           </div></div>
         <${StudentFeedback} fb=${fb} lesson=${l} />
         ${l.status === 'cancelled' && !decision ? null : decision ? html`<div class="card"><${CardHead} icon="shield-check" title="Decision" />

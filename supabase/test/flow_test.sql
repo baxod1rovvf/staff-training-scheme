@@ -74,7 +74,7 @@ select pg_temp.as_user('jasurbek');
 select pg_temp.expect_error($$select public.boss_schedule_lesson((select id from public.profiles where login='cand1'), 'full', '2026-11-10T09:00:00Z', 'Elementary 3', 'Food',
   array[(select id from public.profiles where login='toxirjon'), (select id from public.profiles where login='teach3')])$$, 'MENTOR_AS_OBSERVER');
 select pg_temp.expect_error($$select public.boss_schedule_lesson((select id from public.profiles where login='cand1'), 'full', '2026-11-10T09:00:00Z', '', '',
-  array[(select id from public.profiles where login='toxirjon')])$$, 'OBSERVERS_COUNT');
+  array[]::uuid[])$$, 'OBSERVERS_COUNT');
 select pg_temp.expect_error($$select public.boss_schedule_lesson((select id from public.profiles where login='cand1'), 'full', 'not a date', '', '',
   array[(select id from public.profiles where login='toxirjon'), (select id from public.profiles where login='teacher.two')])$$, 'INVALID_DATE');
 select pg_temp.expect_error($$select public.boss_schedule_lesson((select id from public.profiles where login='cand1'), 'full', '2026-11-10T09:00:00Z', '', '',
@@ -335,5 +335,20 @@ select pg_temp.check((select (j->'outcomes'->>'approved')::int = 1 and (j->'outc
 select pg_temp.check((select j->'criteria'->0->>'name' = 'Preparation' or jsonb_array_length(j->'criteria') = 11 from an), 'criteria sorted weakest first');
 select pg_temp.check((select jsonb_array_length(j->'observers') = 2 and jsonb_array_length(j->'time_to_approval') = 1 from an), 'observer generosity and time to approval');
 select pg_temp.check((select (j->'quiz'->>'attempts')::int = 2 and (j->'student_feedback'->>'answers')::int = 2 from an), 'quiz and student feedback totals');
+
+
+-- 23. One observer is enough
+select pg_temp.as_user('jasurbek');
+create temp table l5 as select (public.boss_schedule_lesson((select id from public.profiles where login='cand1'), 'micro', '2026-11-11T09:00:00Z', '', '',
+  array[(select id from public.profiles where login='toxirjon')])->>'lesson_id')::uuid as id;
+select pg_temp.expect_error(format($$select public.boss_decide(%L, 'approved', '')$$, (select id from l5)), 'NOT_ENOUGH_SCORES');
+select pg_temp.expect_error(format($$select public.boss_remove_observer((select id from public.observer_assignments where lesson_id = %L))$$, (select id from l5)), 'LAST_OBSERVER');
+select pg_temp.as_user('toxirjon');
+select public.teacher_submit_scores((select id from public.observer_assignments where lesson_id = (select id from l5)),
+  (select jsonb_agg(jsonb_build_object('criterion_id', id, 'band', 7)) from public.criteria where rubric_version_id = (select rubric_version_id from public.trial_lessons where id = (select id from l5))));
+select pg_temp.check((select status from public.trial_lessons where id = (select id from l5)) = 'awaiting_decision', 'single-observer lesson waits for the decision after 1 score');
+select pg_temp.as_user('jasurbek');
+select pg_temp.check((public.boss_get_lesson((select id from l5))->'result'->>'needed_count')::int = 1, 'needed count is 1');
+select pg_temp.check(public.boss_decide((select id from l5), 'approved', '')->>'outcome' = 'approved', 'boss decides with one observer');
 
 \echo ALL TESTS PASSED

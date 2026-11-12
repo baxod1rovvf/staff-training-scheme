@@ -14,7 +14,7 @@ export function TeacherHome() {
   const done = w.data.assignments.filter(a => a.submitted || a.decided);
   const shown = tab === 'todo' ? todo : done;
   return html`
-    <${PageHeader} title="My lessons" subtitle="Trial lessons you observe. Score each one after the lesson; the boss sees the result when at least 2 observers have submitted." />
+    <${PageHeader} title="My lessons" subtitle="Trial lessons you observe. Score each one after the lesson; the boss sees the result once the observers have submitted." />
     <${Chips} options=${[['todo', `To score (${todo.length})`], ['done', `Submitted (${done.length})`]]} value=${tab} onChange=${setTab} />
     <div class="card flush">
       ${shown.length ? html`<div class="list">${shown.map(a => html`<a class="list-row" href=${'#/teacher/score/' + a.assignment_id}>
