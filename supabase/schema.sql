@@ -1,0 +1,1144 @@
+-- =====================================================================
+-- Edunest Teacher Certification — Supabase database
+-- Paste this whole file into Supabase → SQL Editor → New query → Run.
+-- Safe to run again: it updates functions and keeps existing data.
+-- =====================================================================
+
+create extension if not exists pgcrypto with schema extensions;
+do $$ begin
+  create extension if not exists pg_net;
+exception when others then
+  raise notice 'pg_net is not available: Telegram messages are switched off';
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Tables
+-- ---------------------------------------------------------------------
+
+create table if not exists public.app_settings (
+  key text primary key,
+  value text not null default ''
+);
+insert into public.app_settings (key, value) values
+  ('telegram_bot_token', ''),
+  ('app_url', 'https://baxod1rovvf.github.io/staff-training-scheme/')
+on conflict (key) do nothing;
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  full_name text not null,
+  login text not null unique,
+  role text not null check (role in ('creator', 'boss', 'teacher', 'candidate')),
+  status text not null default 'active' check (status in ('active', 'blocked')),
+  telegram_chat_id text,
+  stage text check (stage in ('shadowing', 'micro_teaching', 'full_trial', 'decision', 'probation', 'certified', 'declined')),
+  mentor_id uuid references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.rubric_versions (
+  id uuid primary key default gen_random_uuid(),
+  version_no int not null unique,
+  is_active boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.criteria (
+  id uuid primary key default gen_random_uuid(),
+  rubric_version_id uuid not null references public.rubric_versions (id) on delete cascade,
+  sort_order int not null,
+  area text not null,
+  name text not null,
+  must_pass boolean not null default false,
+  desc_9 text, desc_7 text, desc_5 text, desc_3 text,
+  unique (rubric_version_id, sort_order)
+);
+
+create table if not exists public.trial_lessons (
+  id uuid primary key default gen_random_uuid(),
+  candidate_id uuid not null references public.profiles (id) on delete cascade,
+  type text not null check (type in ('micro', 'full')),
+  scheduled_at timestamptz not null,
+  group_name text,
+  topic text,
+  status text not null default 'scheduled' check (status in ('scheduled', 'awaiting_decision', 'approved', 'declined')),
+  rubric_version_id uuid not null references public.rubric_versions (id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.observer_assignments (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null references public.trial_lessons (id) on delete cascade,
+  observer_id uuid not null references public.profiles (id) on delete cascade,
+  submitted_at timestamptz,
+  overall_comment text,
+  telegram_sent boolean not null default false,
+  created_at timestamptz not null default now(),
+  unique (lesson_id, observer_id)
+);
+
+create table if not exists public.scores (
+  id uuid primary key default gen_random_uuid(),
+  assignment_id uuid not null references public.observer_assignments (id) on delete cascade,
+  criterion_id uuid not null references public.criteria (id) on delete cascade,
+  band int not null check (band between 1 and 9),
+  comment text,
+  unique (assignment_id, criterion_id)
+);
+
+create table if not exists public.decisions (
+  id uuid primary key default gen_random_uuid(),
+  lesson_id uuid not null unique references public.trial_lessons (id) on delete cascade,
+  boss_id uuid references public.profiles (id) on delete set null,
+  outcome text not null check (outcome in ('approved', 'declined')),
+  recommended text not null,
+  overall_band numeric(3, 1) not null,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.materials (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  type text not null check (type in ('slides', 'exercises', 'pairwork_games')),
+  level text check (level in ('Beginner', 'Elementary', 'Pre-Intermediate', 'Intermediate', 'Upper-Intermediate', 'Advanced')),
+  file_path text,
+  file_name text,
+  link_url text,
+  created_at timestamptz not null default now(),
+  check (file_path is not null or link_url is not null)
+);
+
+create table if not exists public.journal_entries (
+  id uuid primary key default gen_random_uuid(),
+  candidate_id uuid not null references public.profiles (id) on delete cascade,
+  lesson_date date not null,
+  observed_teacher text not null,
+  group_name text,
+  techniques text not null,
+  will_use text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.calibration_lessons (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  video_url text not null,
+  rubric_version_id uuid not null references public.rubric_versions (id),
+  reference_bands jsonb not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.calibration_attempts (
+  id uuid primary key default gen_random_uuid(),
+  calibration_lesson_id uuid not null references public.calibration_lessons (id) on delete cascade,
+  teacher_id uuid not null references public.profiles (id) on delete cascade,
+  bands jsonb not null,
+  accuracy int not null,
+  created_at timestamptz not null default now()
+);
+
+-- Nobody reads or writes the tables directly: every request goes through the
+-- functions below, which check the user's role first.
+alter table public.app_settings enable row level security;
+alter table public.profiles enable row level security;
+alter table public.rubric_versions enable row level security;
+alter table public.criteria enable row level security;
+alter table public.trial_lessons enable row level security;
+alter table public.observer_assignments enable row level security;
+alter table public.scores enable row level security;
+alter table public.decisions enable row level security;
+alter table public.materials enable row level security;
+alter table public.journal_entries enable row level security;
+alter table public.calibration_lessons enable row level security;
+alter table public.calibration_attempts enable row level security;
+
+-- ---------------------------------------------------------------------
+-- Lesson standard v1 (only when the database is new)
+-- ---------------------------------------------------------------------
+do $$
+declare v uuid;
+begin
+  if not exists (select 1 from public.rubric_versions) then
+    insert into public.rubric_versions (version_no, is_active) values (1, true) returning id into v;
+    insert into public.criteria (rubric_version_id, sort_order, area, name, must_pass, desc_9, desc_7, desc_5, desc_3) values
+    (v, 1, 'Before the lesson', 'Preparation', true,
+      'Detailed written plan with aim, stages, timings; all materials ready; board planned; zero time lost.',
+      'Plan with stages and timings; materials ready; minor lost time.',
+      'Rough plan; some materials missing or improvised; noticeable lost time.',
+      'No plan; materials not ready; lesson visibly improvised.'),
+    (v, 2, 'Before the lesson', 'Clear lesson aim', false,
+      'Aim stated; every activity serves it; students can say what they learned.',
+      'Aim clear; most activities serve it.',
+      'Aim vague; several activities unrelated.',
+      'No identifiable aim.'),
+    (v, 3, 'Teacher delivery', 'Confidence and flow', false,
+      'No hesitation; smooth transitions; handles surprises calmly.',
+      'Mostly confident; small pauses; transitions clear.',
+      'Frequent pauses; abrupt transitions; unsettled by questions.',
+      'Long hesitations; loses the thread; visibly uncomfortable.'),
+    (v, 4, 'Teacher delivery', 'Clear instructions', true,
+      'Short, demonstrated, checked with instruction-check questions; students start immediately.',
+      'Clear; usually demonstrated or checked; rare confusion.',
+      'Long or unchecked; several students confused.',
+      'Unclear; most students do not know what to do.'),
+    (v, 5, 'Teacher delivery', 'Accurate English model', true,
+      'Accurate, natural, graded to level; clear pronunciation.',
+      'Few minor errors; mostly well graded.',
+      'Noticeable errors or poorly graded language.',
+      'Frequent errors that students could copy.'),
+    (v, 6, 'Students'' experience', 'Rapport and atmosphere', false,
+      'Warm, humorous, uses names; students relaxed and willing to make mistakes.',
+      'Friendly; most students comfortable.',
+      'Neutral; some students withdrawn.',
+      'Tense or cold; students afraid to speak.'),
+    (v, 7, 'Students'' experience', 'Student talking time', false,
+      'Students talk much more than the teacher; everyone speaks in pairs or groups.',
+      'Students talk more than the teacher; most speak.',
+      'Roughly equal; mostly strong students speak.',
+      'Teacher dominates; few students speak.'),
+    (v, 8, 'Students'' experience', 'Checking understanding and correcting errors', false,
+      'Concept-check questions used; errors corrected kindly at the right time; peer correction.',
+      'Understanding usually checked; errors corrected appropriately.',
+      '"Do you understand?" only; correction inconsistent.',
+      'Understanding not checked; errors ignored or corrected harshly.'),
+    (v, 9, 'Lesson management', 'Classroom management and pace', true,
+      'Calm control without shouting; no dead time; ends on time with summary and homework.',
+      'Good control; pace mostly right; ends near time.',
+      'Some disorder or dead time; rushed or unfinished ending.',
+      'Loses control; pace wrong; no proper ending.'),
+    (v, 10, 'Lesson management', 'Edunest systems', false,
+      'Attendance, diamonds and Journey used correctly and purposefully.',
+      'Used correctly with minor slips.',
+      'Used partly or late.',
+      'Not used or used wrongly.');
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Helpers (not callable from the app)
+-- ---------------------------------------------------------------------
+
+-- The signed-in user, checked: raises NOT_AUTHENTICATED / BLOCKED / FORBIDDEN
+create or replace function public._auth(p_roles text[] default null)
+returns public.profiles language plpgsql stable security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  select * into p from public.profiles where id = auth.uid();
+  if not found then raise exception 'NOT_AUTHENTICATED'; end if;
+  if p.status = 'blocked' then raise exception 'BLOCKED'; end if;
+  if p_roles is not null and not (p.role = any (p_roles)) then raise exception 'FORBIDDEN'; end if;
+  return p;
+end $$;
+
+create or replace function public._setting(p_key text)
+returns text language sql stable security definer set search_path = public as $$
+  select coalesce((select value from public.app_settings where key = p_key), '');
+$$;
+
+-- Sends a Telegram message (queued through pg_net). Returns true when it was sent off.
+create or replace function public._telegram(p_chat_id text, p_text text)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare token text := public._setting('telegram_bot_token');
+begin
+  if coalesce(token, '') = '' or coalesce(trim(p_chat_id), '') = '' then return false; end if;
+  if to_regproc('net.http_post') is null then return false; end if;
+  execute 'select net.http_post(url := $1, body := $2)'
+    using 'https://api.telegram.org/bot' || token || '/sendMessage',
+          jsonb_build_object('chat_id', trim(p_chat_id), 'text', p_text);
+  return true;
+exception when others then
+  return false;
+end $$;
+
+create or replace function public._tashkent(p_at timestamptz)
+returns text language sql immutable as $$
+  select to_char(p_at at time zone 'Asia/Tashkent', 'DD Mon YYYY, HH24:MI');
+$$;
+
+create or replace function public._open_link(p_path text)
+returns text language sql stable security definer set search_path = public as $$
+  select case when public._setting('app_url') = '' then ''
+    else E'\nOpen: ' || rtrim(public._setting('app_url'), '/') || '/#/' || p_path end;
+$$;
+
+-- IELTS-style rounding: below .25 down, .25–.74 to .5, .75 and above up
+create or replace function public._ielts_round(x numeric)
+returns numeric language sql immutable as $$
+  select case
+    when x - floor(x + 0.000000001) < 0.25 - 0.000000001 then floor(x + 0.000000001)
+    when x - floor(x + 0.000000001) < 0.75 - 0.000000001 then floor(x + 0.000000001) + 0.5
+    else floor(x + 0.000000001) + 1 end;
+$$;
+
+-- ===== Edunest Lesson Standard rules =====
+-- Criterion band = average of the submitted observers' bands.
+-- Overall = IELTS-rounded average of the criterion bands.
+-- Ready = overall ≥ 6, every must-pass criterion ≥ 6, no criterion below 4.
+-- Disagreement = 3 or more bands between the highest and lowest observer.
+create or replace function public._lesson_result(p_lesson_id uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_rows jsonb;
+  v_submitted int;
+  v_complete boolean;
+  v_raw numeric;
+  v_overall numeric;
+  v_must boolean;
+  v_none4 boolean;
+begin
+  select count(*) into v_submitted from public.observer_assignments
+    where lesson_id = p_lesson_id and submitted_at is not null;
+
+  with per as (
+    select c.id, c.name, c.area, c.must_pass, c.sort_order,
+      coalesce(array_agg(s.band order by s.band) filter (where s.band is not null), '{}') as bands,
+      avg(s.band)::numeric as raw_avg
+    from public.trial_lessons l
+    join public.criteria c on c.rubric_version_id = l.rubric_version_id
+    left join public.observer_assignments a on a.lesson_id = l.id and a.submitted_at is not null
+    left join public.scores s on s.assignment_id = a.id and s.criterion_id = c.id
+    where l.id = p_lesson_id
+    group by c.id
+  )
+  select
+    coalesce(jsonb_agg(jsonb_build_object(
+      'criterion_id', id, 'name', name, 'area', area, 'must_pass', must_pass, 'sort_order', sort_order,
+      'bands', to_jsonb(bands),
+      'band_avg', case when raw_avg is null then null else round(raw_avg, 2) end,
+      'disagreement', cardinality(bands) >= 2 and (bands[cardinality(bands)] - bands[1]) >= 3
+    ) order by sort_order), '[]'::jsonb),
+    count(*) > 0 and bool_and(raw_avg is not null),
+    avg(raw_avg),
+    coalesce(bool_and(raw_avg >= 6) filter (where must_pass), true),
+    bool_and(raw_avg >= 4)
+  into v_rows, v_complete, v_raw, v_must, v_none4
+  from per;
+
+  v_complete := coalesce(v_complete, false);
+  if v_complete then v_overall := public._ielts_round(v_raw); end if;
+
+  return jsonb_build_object(
+    'criteria', v_rows,
+    'overall', v_overall,
+    'overall_raw', case when v_complete then round(v_raw, 3) else null end,
+    'must_pass_ok', v_complete and v_must,
+    'none_below_4', v_complete and coalesce(v_none4, false),
+    'recommendation', case when v_complete and v_overall >= 6 and v_must and coalesce(v_none4, false) then 'ready' else 'not_ready' end,
+    'submitted_count', v_submitted,
+    'disagreements', coalesce((select jsonb_agg(x->>'name') from jsonb_array_elements(v_rows) x where (x->>'disagreement')::boolean), '[]'::jsonb)
+  );
+end $$;
+
+-- Lesson status follows the number of submitted observers (until it is decided)
+create or replace function public._refresh_lesson_status(p_lesson_id uuid)
+returns void language sql security definer set search_path = public as $$
+  update public.trial_lessons set status = case
+      when (select count(*) from public.observer_assignments where lesson_id = p_lesson_id and submitted_at is not null) >= 2
+      then 'awaiting_decision' else 'scheduled' end
+  where id = p_lesson_id and status in ('scheduled', 'awaiting_decision');
+$$;
+
+create or replace function public._profile_json(p public.profiles)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('id', p.id, 'full_name', p.full_name, 'login', p.login, 'role', p.role, 'status', p.status,
+    'telegram_chat_id', p.telegram_chat_id, 'stage', p.stage, 'mentor_id', p.mentor_id,
+    'mentor_name', (select full_name from public.profiles m where m.id = p.mentor_id), 'created_at', p.created_at);
+$$;
+
+-- Creates the login (Supabase Auth) and the profile together
+create or replace function public._create_user(p_full_name text, p_login text, p_password text, p_role text,
+  p_status text, p_telegram_chat_id text, p_mentor_id uuid)
+returns public.profiles language plpgsql security definer set search_path = public, extensions as $$
+declare
+  v_login text := lower(trim(coalesce(p_login, '')));
+  v_name text := trim(coalesce(p_full_name, ''));
+  v_status text := coalesce(nullif(p_status, ''), 'active');
+  v_email text;
+  v_id uuid := gen_random_uuid();
+  v_mentor public.profiles;
+  p public.profiles;
+begin
+  if v_login !~ '^[a-z0-9._-]{3,32}$' then raise exception 'INVALID_LOGIN'; end if;
+  if v_name = '' then raise exception 'NAME_REQUIRED'; end if;
+  if length(coalesce(p_password, '')) < 8 then raise exception 'PASSWORD_TOO_SHORT'; end if;
+  if p_role is null or p_role not in ('creator', 'boss', 'teacher', 'candidate') then raise exception 'INVALID_ROLE'; end if;
+  if v_status not in ('active', 'blocked') then raise exception 'INVALID_STATUS'; end if;
+  v_email := v_login || '@users.edunest.local';
+  if exists (select 1 from public.profiles where login = v_login) or exists (select 1 from auth.users where email = v_email) then
+    raise exception 'LOGIN_TAKEN';
+  end if;
+  if p_role = 'candidate' and p_mentor_id is not null then
+    select * into v_mentor from public.profiles where id = p_mentor_id;
+    if not found or v_mentor.role <> 'teacher' or v_mentor.status <> 'active' then raise exception 'NOT_A_TEACHER'; end if;
+  end if;
+
+  insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change_token_new, email_change, banned_until)
+  values ('00000000-0000-0000-0000-000000000000', v_id, 'authenticated', 'authenticated', v_email,
+    crypt(p_password, gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}'::jsonb, jsonb_build_object('full_name', v_name), now(), now(),
+    '', '', '', '', case when v_status = 'blocked' then '2999-12-31 00:00:00+00'::timestamptz end);
+
+  insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+  values (gen_random_uuid(), v_id, v_id::text,
+    jsonb_build_object('sub', v_id::text, 'email', v_email, 'email_verified', true),
+    'email', now(), now(), now());
+
+  insert into public.profiles (id, full_name, login, role, status, telegram_chat_id, stage, mentor_id)
+  values (v_id, v_name, v_login, p_role, v_status, nullif(trim(coalesce(p_telegram_chat_id, '')), ''),
+    case when p_role = 'candidate' then 'shadowing' end,
+    case when p_role = 'candidate' then p_mentor_id end)
+  returning * into p;
+  return p;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Everyone
+-- ---------------------------------------------------------------------
+
+create or replace function public.me()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  return public._profile_json(public._auth());
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Creator: accounts
+-- ---------------------------------------------------------------------
+
+create or replace function public.creator_list_users()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public._auth(array['creator']);
+  return coalesce((select jsonb_agg(public._profile_json(p) order by p.created_at desc) from public.profiles p), '[]'::jsonb);
+end $$;
+
+create or replace function public.creator_create_user(p_full_name text, p_login text, p_password text, p_role text,
+  p_status text default 'active', p_telegram_chat_id text default '', p_mentor_id uuid default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+begin
+  perform public._auth(array['creator']);
+  return public._profile_json(public._create_user(p_full_name, p_login, p_password, p_role, p_status, p_telegram_chat_id, p_mentor_id));
+end $$;
+
+create or replace function public.creator_update_user(p_user_id uuid, p_full_name text, p_login text, p_role text,
+  p_status text, p_telegram_chat_id text default '', p_mentor_id uuid default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  me public.profiles := public._auth(array['creator']);
+  t public.profiles;
+  v_login text := lower(trim(coalesce(p_login, '')));
+  v_name text := trim(coalesce(p_full_name, ''));
+  v_mentor public.profiles;
+begin
+  select * into t from public.profiles where id = p_user_id;
+  if not found then raise exception 'USER_NOT_FOUND'; end if;
+  if v_login !~ '^[a-z0-9._-]{3,32}$' then raise exception 'INVALID_LOGIN'; end if;
+  if v_name = '' then raise exception 'NAME_REQUIRED'; end if;
+  if p_role not in ('creator', 'boss', 'teacher', 'candidate') then raise exception 'INVALID_ROLE'; end if;
+  if p_status not in ('active', 'blocked') then raise exception 'INVALID_STATUS'; end if;
+  if exists (select 1 from public.profiles where login = v_login and id <> t.id) then raise exception 'LOGIN_TAKEN'; end if;
+  if t.id = me.id and p_role <> 'creator' then raise exception 'CANNOT_CHANGE_OWN_ROLE'; end if;
+  if t.id = me.id and p_status = 'blocked' then raise exception 'CANNOT_BLOCK_SELF'; end if;
+  if p_role = 'candidate' and p_mentor_id is not null then
+    select * into v_mentor from public.profiles where id = p_mentor_id;
+    if not found or v_mentor.role <> 'teacher' or v_mentor.status <> 'active' then raise exception 'NOT_A_TEACHER'; end if;
+  end if;
+
+  update public.profiles set
+    full_name = v_name, login = v_login, role = p_role, status = p_status,
+    telegram_chat_id = nullif(trim(coalesce(p_telegram_chat_id, '')), ''),
+    mentor_id = case when p_role = 'candidate' then p_mentor_id end,
+    stage = case when p_role <> 'candidate' then null when t.role = 'candidate' then t.stage else 'shadowing' end
+  where id = t.id returning * into t;
+
+  update auth.users set email = v_login || '@users.edunest.local',
+    banned_until = case when p_status = 'blocked' then '2999-12-31 00:00:00+00'::timestamptz end,
+    raw_user_meta_data = coalesce(raw_user_meta_data, '{}'::jsonb) || jsonb_build_object('full_name', v_name),
+    updated_at = now()
+  where id = t.id;
+  update auth.identities set identity_data = identity_data || jsonb_build_object('email', v_login || '@users.edunest.local')
+  where user_id = t.id and provider = 'email';
+  return public._profile_json(t);
+end $$;
+
+create or replace function public.creator_reset_password(p_user_id uuid, p_password text)
+returns jsonb language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform public._auth(array['creator']);
+  if length(coalesce(p_password, '')) < 8 then raise exception 'PASSWORD_TOO_SHORT'; end if;
+  update auth.users set encrypted_password = crypt(p_password, gen_salt('bf')), updated_at = now() where id = p_user_id;
+  if not found then raise exception 'USER_NOT_FOUND'; end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Boss: people, candidates
+-- ---------------------------------------------------------------------
+
+create or replace function public.boss_list_people(p_role text)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public._auth(array['boss']);
+  return coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'name', p.full_name, 'login', p.login,
+      'telegram_linked', coalesce(p.telegram_chat_id, '') <> '', 'stage', p.stage, 'mentor_id', p.mentor_id)
+      order by lower(p.full_name))
+    from public.profiles p where p.role = p_role and p.status = 'active'), '[]'::jsonb);
+end $$;
+
+create or replace function public.boss_list_candidates()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public._auth(array['boss']);
+  return coalesce((select jsonb_agg(jsonb_build_object(
+      'id', p.id, 'name', p.full_name, 'login', p.login, 'status', p.status, 'stage', p.stage,
+      'mentor_id', p.mentor_id, 'mentor_name', m.full_name, 'created_at', p.created_at,
+      'lessons', (select count(*) from public.trial_lessons l where l.candidate_id = p.id),
+      'journal_count', (select count(*) from public.journal_entries j where j.candidate_id = p.id),
+      'last_lesson', (select jsonb_build_object('scheduled_at', l.scheduled_at, 'type', l.type, 'status', l.status,
+          'overall_band', d.overall_band)
+        from public.trial_lessons l left join public.decisions d on d.lesson_id = l.id
+        where l.candidate_id = p.id order by l.scheduled_at desc limit 1)
+    ) order by lower(p.full_name))
+    from public.profiles p left join public.profiles m on m.id = p.mentor_id
+    where p.role = 'candidate'), '[]'::jsonb);
+end $$;
+
+create or replace function public.boss_list_lessons(p_candidate_id uuid default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public._auth(array['boss']);
+  return coalesce((select jsonb_agg(jsonb_build_object(
+      'id', l.id, 'type', l.type, 'scheduled_at', l.scheduled_at, 'group_name', l.group_name, 'topic', l.topic,
+      'status', l.status, 'candidate_id', l.candidate_id, 'candidate_name', u.full_name,
+      'observers_total', (select count(*) from public.observer_assignments a where a.lesson_id = l.id),
+      'observers_submitted', (select count(*) from public.observer_assignments a where a.lesson_id = l.id and a.submitted_at is not null),
+      'has_disagreement', exists (select 1 from public.observer_assignments a join public.scores s on s.assignment_id = a.id
+          where a.lesson_id = l.id and a.submitted_at is not null group by s.criterion_id having max(s.band) - min(s.band) >= 3),
+      'decision', case when d.id is null then null else jsonb_build_object('outcome', d.outcome, 'overall_band', d.overall_band, 'decided_at', d.created_at) end
+    ) order by l.scheduled_at desc)
+    from public.trial_lessons l
+    join public.profiles u on u.id = l.candidate_id
+    left join public.decisions d on d.lesson_id = l.id
+    where p_candidate_id is null or l.candidate_id = p_candidate_id), '[]'::jsonb);
+end $$;
+
+create or replace function public.boss_get_candidate(p_candidate_id uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare c public.profiles;
+begin
+  perform public._auth(array['boss']);
+  select * into c from public.profiles where id = p_candidate_id and role = 'candidate';
+  if not found then raise exception 'CANDIDATE_NOT_FOUND'; end if;
+  return jsonb_build_object(
+    'candidate', public._profile_json(c),
+    'lessons', public.boss_list_lessons(p_candidate_id),
+    'journal', coalesce((select jsonb_agg(to_jsonb(j) order by j.lesson_date desc, j.created_at desc)
+      from public.journal_entries j where j.candidate_id = c.id), '[]'::jsonb));
+end $$;
+
+create or replace function public.boss_set_stage(p_candidate_id uuid, p_stage text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare c public.profiles;
+begin
+  perform public._auth(array['boss']);
+  if p_stage not in ('shadowing', 'micro_teaching', 'full_trial', 'decision', 'probation', 'certified', 'declined') then
+    raise exception 'INVALID_STAGE'; end if;
+  update public.profiles set stage = p_stage where id = p_candidate_id and role = 'candidate' returning * into c;
+  if not found then raise exception 'NOT_A_CANDIDATE'; end if;
+  return public._profile_json(c);
+end $$;
+
+create or replace function public.boss_set_mentor(p_candidate_id uuid, p_mentor_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare c public.profiles; m public.profiles;
+begin
+  perform public._auth(array['boss']);
+  if p_mentor_id is not null then
+    select * into m from public.profiles where id = p_mentor_id;
+    if not found or m.role <> 'teacher' or m.status <> 'active' then raise exception 'NOT_A_TEACHER'; end if;
+  end if;
+  update public.profiles set mentor_id = p_mentor_id where id = p_candidate_id and role = 'candidate' returning * into c;
+  if not found then raise exception 'NOT_A_CANDIDATE'; end if;
+  return public._profile_json(c);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Boss: trial lessons
+-- ---------------------------------------------------------------------
+
+create or replace function public.boss_schedule_lesson(p_candidate_id uuid, p_type text, p_scheduled_at text,
+  p_group_name text default '', p_topic text default '', p_observer_ids uuid[] default '{}')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_version uuid;
+  v_when timestamptz;
+  c public.profiles;
+  o public.profiles;
+  v_ids uuid[];
+  v_lesson uuid;
+  v_assignment uuid;
+  v_text text;
+  v_failed uuid[] := '{}';
+  v_sent boolean;
+begin
+  perform public._auth(array['boss']);
+  select id into v_version from public.rubric_versions where is_active limit 1;
+  if v_version is null then raise exception 'NO_ACTIVE_STANDARD'; end if;
+  if p_type not in ('micro', 'full') then raise exception 'INVALID_TYPE'; end if;
+  begin v_when := p_scheduled_at::timestamptz;
+  exception when others then raise exception 'INVALID_DATE'; end;
+  if v_when is null then raise exception 'INVALID_DATE'; end if;
+  select * into c from public.profiles where id = p_candidate_id;
+  if not found or c.role <> 'candidate' then raise exception 'NOT_A_CANDIDATE'; end if;
+  select array_agg(distinct x) into v_ids from unnest(coalesce(p_observer_ids, '{}')) x where x is not null;
+  if coalesce(cardinality(v_ids), 0) < 2 or cardinality(v_ids) > 3 then raise exception 'OBSERVERS_COUNT'; end if;
+  if exists (select 1 from unnest(v_ids) x left join public.profiles p on p.id = x
+             where p.id is null or p.role <> 'teacher' or p.status <> 'active') then raise exception 'NOT_A_TEACHER'; end if;
+  if c.mentor_id is not null and c.mentor_id = any (v_ids) then raise exception 'MENTOR_AS_OBSERVER'; end if;
+
+  insert into public.trial_lessons (candidate_id, type, scheduled_at, group_name, topic, rubric_version_id)
+  values (c.id, p_type, v_when, nullif(trim(coalesce(p_group_name, '')), ''), nullif(trim(coalesce(p_topic, '')), ''), v_version)
+  returning id into v_lesson;
+
+  v_text := 'New trial lesson to observe: ' || c.full_name || ' — ' ||
+    case when p_type = 'full' then 'full trial lesson' else 'micro-teaching' end || ', ' || public._tashkent(v_when) ||
+    coalesce(', group ' || nullif(trim(coalesce(p_group_name, '')), ''), '') || '.' || public._open_link('teacher');
+
+  for o in select p.* from public.profiles p where p.id = any (v_ids) loop
+    v_sent := public._telegram(o.telegram_chat_id, v_text);
+    insert into public.observer_assignments (lesson_id, observer_id, telegram_sent) values (v_lesson, o.id, v_sent);
+    if not v_sent then v_failed := v_failed || o.id; end if;
+  end loop;
+  return jsonb_build_object('lesson_id', v_lesson, 'telegram_failed', to_jsonb(v_failed));
+end $$;
+
+create or replace function public.boss_add_observer(p_lesson_id uuid, p_observer_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare l public.trial_lessons; t public.profiles; c public.profiles; v_sent boolean; v_id uuid;
+begin
+  perform public._auth(array['boss']);
+  select * into l from public.trial_lessons where id = p_lesson_id;
+  if not found then raise exception 'LESSON_NOT_FOUND'; end if;
+  if l.status in ('approved', 'declined') then raise exception 'ALREADY_DECIDED'; end if;
+  select * into t from public.profiles where id = p_observer_id;
+  if not found or t.role <> 'teacher' or t.status <> 'active' then raise exception 'NOT_A_TEACHER'; end if;
+  select * into c from public.profiles where id = l.candidate_id;
+  if c.mentor_id = t.id then raise exception 'MENTOR_AS_OBSERVER'; end if;
+  if exists (select 1 from public.observer_assignments where lesson_id = l.id and observer_id = t.id) then raise exception 'ALREADY_OBSERVER'; end if;
+  v_sent := public._telegram(t.telegram_chat_id, 'You were added as an observer: ' || c.full_name || ' — ' ||
+    case when l.type = 'full' then 'full trial lesson' else 'micro-teaching' end || ', ' || public._tashkent(l.scheduled_at) ||
+    coalesce(', group ' || l.group_name, '') || '.' || public._open_link('teacher'));
+  insert into public.observer_assignments (lesson_id, observer_id, telegram_sent) values (l.id, t.id, v_sent) returning id into v_id;
+  return jsonb_build_object('assignment_id', v_id, 'telegram_sent', v_sent);
+end $$;
+
+create or replace function public.boss_reopen_score(p_assignment_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare a public.observer_assignments; v_status text;
+begin
+  perform public._auth(array['boss']);
+  select * into a from public.observer_assignments where id = p_assignment_id;
+  if not found then raise exception 'ASSIGNMENT_NOT_FOUND'; end if;
+  select status into v_status from public.trial_lessons where id = a.lesson_id;
+  if v_status in ('approved', 'declined') then raise exception 'ALREADY_DECIDED'; end if;
+  update public.observer_assignments set submitted_at = null where id = a.id;
+  perform public._refresh_lesson_status(a.lesson_id);
+  return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.boss_get_lesson(p_lesson_id uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare l public.trial_lessons; c public.profiles;
+begin
+  perform public._auth(array['boss']);
+  select * into l from public.trial_lessons where id = p_lesson_id;
+  if not found then raise exception 'LESSON_NOT_FOUND'; end if;
+  select * into c from public.profiles where id = l.candidate_id;
+  return jsonb_build_object(
+    'lesson', to_jsonb(l),
+    'candidate', public._profile_json(c),
+    'observers', coalesce((select jsonb_agg(jsonb_build_object(
+        'assignment_id', a.id, 'observer_id', a.observer_id, 'name', p.full_name, 'login', p.login,
+        'submitted', a.submitted_at is not null, 'submitted_at', a.submitted_at,
+        'overall_comment', case when a.submitted_at is not null then a.overall_comment end,
+        'telegram_sent', a.telegram_sent,
+        'scores', case when a.submitted_at is null then '[]'::jsonb else coalesce((select jsonb_agg(jsonb_build_object(
+            'criterion_id', s.criterion_id, 'band', s.band, 'comment', s.comment)) from public.scores s where s.assignment_id = a.id), '[]'::jsonb) end
+      ) order by a.created_at)
+      from public.observer_assignments a join public.profiles p on p.id = a.observer_id where a.lesson_id = l.id), '[]'::jsonb),
+    'result', public._lesson_result(l.id),
+    'decision', (select jsonb_build_object('outcome', d.outcome, 'recommended', d.recommended, 'overall_band', d.overall_band,
+        'note', d.note, 'created_at', d.created_at, 'boss_name', b.full_name)
+      from public.decisions d left join public.profiles b on b.id = d.boss_id where d.lesson_id = l.id)
+  );
+end $$;
+
+create or replace function public.boss_decide(p_lesson_id uuid, p_outcome text, p_note text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  me public.profiles := public._auth(array['boss']);
+  l public.trial_lessons;
+  r jsonb;
+  v_note text := nullif(trim(coalesce(p_note, '')), '');
+  v_override boolean;
+begin
+  select * into l from public.trial_lessons where id = p_lesson_id for update;
+  if not found then raise exception 'LESSON_NOT_FOUND'; end if;
+  if l.status in ('approved', 'declined') or exists (select 1 from public.decisions where lesson_id = l.id) then
+    raise exception 'ALREADY_DECIDED'; end if;
+  if p_outcome not in ('approved', 'declined') then raise exception 'INVALID_OUTCOME'; end if;
+  r := public._lesson_result(l.id);
+  if (r->>'submitted_count')::int < 2 or r->'overall' = 'null'::jsonb then raise exception 'NOT_ENOUGH_SCORES'; end if;
+  v_override := (p_outcome = 'approved' and r->>'recommendation' <> 'ready') or (p_outcome = 'declined' and r->>'recommendation' = 'ready');
+  if v_override and v_note is null then raise exception 'NOTE_REQUIRED'; end if;
+
+  insert into public.decisions (lesson_id, boss_id, outcome, recommended, overall_band, note)
+  values (l.id, me.id, p_outcome, r->>'recommendation', (r->>'overall')::numeric, v_note);
+  update public.trial_lessons set status = p_outcome where id = l.id;
+  -- Approving a full trial lesson puts the candidate on probation
+  if p_outcome = 'approved' and l.type = 'full' then
+    update public.profiles set stage = 'probation' where id = l.candidate_id;
+  end if;
+  return jsonb_build_object('outcome', p_outcome, 'recommended', r->>'recommendation', 'overall_band', (r->>'overall')::numeric,
+    'to_probation', p_outcome = 'approved' and l.type = 'full');
+end $$;
+
+create or replace function public.boss_send_reminders()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare rec record; v_out jsonb := '[]'::jsonb; v_sent boolean;
+begin
+  perform public._auth(array['boss']);
+  for rec in
+    select a.id as assignment_id, l.id as lesson_id, o.full_name as observer_name, o.telegram_chat_id,
+      l.scheduled_at, c.full_name as candidate_name
+    from public.observer_assignments a
+    join public.trial_lessons l on l.id = a.lesson_id
+    join public.profiles o on o.id = a.observer_id
+    join public.profiles c on c.id = l.candidate_id
+    where a.submitted_at is null and l.status in ('scheduled', 'awaiting_decision')
+      and l.scheduled_at < now() - interval '24 hours' and o.status = 'active'
+    order by l.scheduled_at
+  loop
+    v_sent := public._telegram(rec.telegram_chat_id, 'Reminder: please submit your scores for ' || rec.candidate_name ||
+      '''s lesson on ' || public._tashkent(rec.scheduled_at) || '.' || public._open_link('teacher'));
+    v_out := v_out || jsonb_build_object('assignment_id', rec.assignment_id, 'lesson_id', rec.lesson_id,
+      'observer_name', rec.observer_name, 'candidate_name', rec.candidate_name, 'scheduled_at', rec.scheduled_at, 'sent', v_sent);
+  end loop;
+  return jsonb_build_object('overdue', v_out, 'telegram_configured', public._setting('telegram_bot_token') <> '');
+end $$;
+
+create or replace function public.boss_dashboard()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public._auth(array['boss']);
+  return jsonb_build_object(
+    'stages', coalesce((select jsonb_object_agg(stage, n) from (select stage, count(*) n from public.profiles
+        where role = 'candidate' and status = 'active' group by stage) s), '{}'::jsonb),
+    'candidates', (select count(*) from public.profiles where role = 'candidate' and status = 'active'),
+    'teachers', (select count(*) from public.profiles where role = 'teacher' and status = 'active'),
+    'awaiting', coalesce((select jsonb_agg(x) from (
+        select l.id, l.type, l.scheduled_at, l.group_name, l.topic, l.status, u.full_name as candidate_name,
+          (select count(*) from public.observer_assignments a where a.lesson_id = l.id) as observers_total,
+          (select count(*) from public.observer_assignments a where a.lesson_id = l.id and a.submitted_at is not null) as observers_submitted
+        from public.trial_lessons l join public.profiles u on u.id = l.candidate_id
+        where l.status = 'awaiting_decision' order by l.scheduled_at) x), '[]'::jsonb),
+    'upcoming', coalesce((select jsonb_agg(x) from (
+        select l.id, l.type, l.scheduled_at, l.group_name, l.topic, l.status, u.full_name as candidate_name,
+          (select count(*) from public.observer_assignments a where a.lesson_id = l.id) as observers_total,
+          (select count(*) from public.observer_assignments a where a.lesson_id = l.id and a.submitted_at is not null) as observers_submitted
+        from public.trial_lessons l join public.profiles u on u.id = l.candidate_id
+        where l.status = 'scheduled' order by l.scheduled_at limit 8) x), '[]'::jsonb),
+    'overdue', (select count(*) from public.observer_assignments a join public.trial_lessons l on l.id = a.lesson_id
+        where a.submitted_at is null and l.status in ('scheduled', 'awaiting_decision') and l.scheduled_at < now() - interval '24 hours'),
+    'telegram_configured', public._setting('telegram_bot_token') <> ''
+  );
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Boss: lesson standard (versioned)
+-- ---------------------------------------------------------------------
+
+create or replace function public._criteria_json(p_version uuid)
+returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(to_jsonb(c) order by c.sort_order), '[]'::jsonb) from public.criteria c where c.rubric_version_id = p_version;
+$$;
+
+create or replace function public.boss_get_standard()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare a public.rubric_versions; d public.rubric_versions;
+begin
+  perform public._auth(array['boss']);
+  select * into a from public.rubric_versions where is_active limit 1;
+  select * into d from public.rubric_versions where not is_active and version_no > coalesce(a.version_no, 0) order by version_no desc limit 1;
+  return jsonb_build_object(
+    'active', case when a.id is null then null else jsonb_build_object('id', a.id, 'version_no', a.version_no, 'criteria', public._criteria_json(a.id)) end,
+    'draft', case when d.id is null then null else jsonb_build_object('id', d.id, 'version_no', d.version_no, 'criteria', public._criteria_json(d.id)) end,
+    'versions', coalesce((select jsonb_agg(jsonb_build_object('id', id, 'version_no', version_no, 'is_active', is_active, 'created_at', created_at)
+      order by version_no desc) from public.rubric_versions), '[]'::jsonb));
+end $$;
+
+create or replace function public.boss_save_draft_criteria(p_criteria jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare a public.rubric_versions; v_draft uuid; v_no int; x jsonb; i int := 0; v_orders int[] := '{}'; v_order int;
+begin
+  perform public._auth(array['boss']);
+  if jsonb_typeof(p_criteria) <> 'array' or jsonb_array_length(p_criteria) = 0 or jsonb_array_length(p_criteria) > 20 then
+    raise exception 'NO_CRITERIA'; end if;
+  for x in select * from jsonb_array_elements(p_criteria) loop
+    i := i + 1;
+    if trim(coalesce(x->>'name', '')) = '' then raise exception 'NAME_REQUIRED'; end if;
+    if trim(coalesce(x->>'area', '')) = '' then raise exception 'AREA_REQUIRED'; end if;
+    v_order := coalesce((x->>'sort_order')::int, i);
+    if v_order = any (v_orders) then raise exception 'DUPLICATE_ORDER'; end if;
+    v_orders := v_orders || v_order;
+  end loop;
+  select * into a from public.rubric_versions where is_active limit 1;
+  select id, version_no into v_draft, v_no from public.rubric_versions
+    where not is_active and version_no > coalesce(a.version_no, 0) order by version_no desc limit 1;
+  if v_draft is null then
+    insert into public.rubric_versions (version_no, is_active)
+    values ((select coalesce(max(version_no), 0) + 1 from public.rubric_versions), false) returning id, version_no into v_draft, v_no;
+  end if;
+  delete from public.criteria where rubric_version_id = v_draft;
+  i := 0;
+  for x in select * from jsonb_array_elements(p_criteria) loop
+    i := i + 1;
+    insert into public.criteria (rubric_version_id, sort_order, area, name, must_pass, desc_9, desc_7, desc_5, desc_3)
+    values (v_draft, coalesce((x->>'sort_order')::int, i), trim(x->>'area'), trim(x->>'name'), coalesce((x->>'must_pass')::boolean, false),
+      nullif(trim(coalesce(x->>'desc_9', '')), ''), nullif(trim(coalesce(x->>'desc_7', '')), ''),
+      nullif(trim(coalesce(x->>'desc_5', '')), ''), nullif(trim(coalesce(x->>'desc_3', '')), ''));
+  end loop;
+  return jsonb_build_object('draft_id', v_draft, 'version_no', v_no, 'criteria_count', i);
+end $$;
+
+create or replace function public.boss_publish_rubric()
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare a public.rubric_versions; d public.rubric_versions;
+begin
+  perform public._auth(array['boss']);
+  select * into a from public.rubric_versions where is_active limit 1;
+  select * into d from public.rubric_versions where not is_active and version_no > coalesce(a.version_no, 0) order by version_no desc limit 1;
+  if d.id is null then raise exception 'NO_DRAFT'; end if;
+  if not exists (select 1 from public.criteria where rubric_version_id = d.id) then raise exception 'DRAFT_EMPTY'; end if;
+  update public.rubric_versions set is_active = false where is_active;
+  update public.rubric_versions set is_active = true where id = d.id;
+  return jsonb_build_object('version_no', d.version_no, 'version_id', d.id);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Materials (files live in the public "materials" storage bucket)
+-- ---------------------------------------------------------------------
+
+create or replace function public.materials_list(p_type text default '', p_level text default '')
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public._auth();
+  return coalesce((select jsonb_agg(to_jsonb(m) order by m.created_at desc) from public.materials m
+    where (coalesce(p_type, '') = '' or m.type = p_type) and (coalesce(p_level, '') = '' or m.level = p_level)), '[]'::jsonb);
+end $$;
+
+create or replace function public.boss_save_material(p_id uuid, p_title text, p_description text, p_type text, p_level text,
+  p_link_url text, p_file_path text default null, p_file_name text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare cur public.materials; m public.materials; v_link text := nullif(trim(coalesce(p_link_url, '')), '');
+  v_level text := nullif(trim(coalesce(p_level, '')), ''); v_file text := nullif(trim(coalesce(p_file_path, '')), '');
+begin
+  perform public._auth(array['boss']);
+  if p_id is not null then
+    select * into cur from public.materials where id = p_id;
+    if not found then raise exception 'MATERIAL_NOT_FOUND'; end if;
+  end if;
+  if trim(coalesce(p_title, '')) = '' then raise exception 'TITLE_REQUIRED'; end if;
+  if p_type not in ('slides', 'exercises', 'pairwork_games') then raise exception 'INVALID_TYPE'; end if;
+  if v_level is not null and v_level not in ('Beginner', 'Elementary', 'Pre-Intermediate', 'Intermediate', 'Upper-Intermediate', 'Advanced') then
+    raise exception 'INVALID_LEVEL'; end if;
+  if v_file is null and v_link is null and cur.file_path is null then raise exception 'FILE_OR_LINK_REQUIRED'; end if;
+  if p_id is null then
+    insert into public.materials (title, description, type, level, link_url, file_path, file_name)
+    values (trim(p_title), nullif(trim(coalesce(p_description, '')), ''), p_type, v_level, v_link, v_file, nullif(p_file_name, ''))
+    returning * into m;
+  else
+    update public.materials set title = trim(p_title), description = nullif(trim(coalesce(p_description, '')), ''), type = p_type,
+      level = v_level, link_url = v_link, file_path = coalesce(v_file, cur.file_path),
+      file_name = case when v_file is not null then nullif(p_file_name, '') else cur.file_name end
+    where id = p_id returning * into m;
+  end if;
+  return to_jsonb(m) || jsonb_build_object('replaced_file', case when v_file is not null and cur.file_path is not null then cur.file_path end);
+end $$;
+
+create or replace function public.boss_delete_material(p_id uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare m public.materials;
+begin
+  perform public._auth(array['boss']);
+  delete from public.materials where id = p_id returning * into m;
+  if not found then raise exception 'MATERIAL_NOT_FOUND'; end if;
+  return jsonb_build_object('ok', true, 'file_path', m.file_path);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Calibration
+-- ---------------------------------------------------------------------
+
+create or replace function public.boss_save_calibration_lesson(p_id uuid, p_title text, p_video_url text,
+  p_reference_bands jsonb, p_is_active boolean default true)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_version uuid; c record; v_bands jsonb := '{}'::jsonb; v_b int; x public.calibration_lessons;
+begin
+  perform public._auth(array['boss']);
+  if p_id is not null and not exists (select 1 from public.calibration_lessons where id = p_id) then raise exception 'NOT_FOUND'; end if;
+  if trim(coalesce(p_title, '')) = '' then raise exception 'TITLE_REQUIRED'; end if;
+  if trim(coalesce(p_video_url, '')) = '' then raise exception 'VIDEO_REQUIRED'; end if;
+  select id into v_version from public.rubric_versions where is_active limit 1;
+  if v_version is null then raise exception 'NO_ACTIVE_STANDARD'; end if;
+  for c in select id from public.criteria where rubric_version_id = v_version loop
+    if p_reference_bands->>(c.id::text) is null or p_reference_bands->>(c.id::text) = '' then raise exception 'REFERENCE_INCOMPLETE'; end if;
+    begin v_b := (p_reference_bands->>(c.id::text))::int; exception when others then raise exception 'INVALID_BAND'; end;
+    if v_b < 1 or v_b > 9 then raise exception 'INVALID_BAND'; end if;
+    v_bands := v_bands || jsonb_build_object(c.id::text, v_b);
+  end loop;
+  if p_id is null then
+    insert into public.calibration_lessons (title, video_url, rubric_version_id, reference_bands, is_active)
+    values (trim(p_title), trim(p_video_url), v_version, v_bands, coalesce(p_is_active, true)) returning * into x;
+  else
+    update public.calibration_lessons set title = trim(p_title), video_url = trim(p_video_url), rubric_version_id = v_version,
+      reference_bands = v_bands, is_active = coalesce(p_is_active, true) where id = p_id returning * into x;
+  end if;
+  return jsonb_build_object('id', x.id, 'title', x.title, 'is_active', x.is_active);
+end $$;
+
+create or replace function public.calibration_overview()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me public.profiles := public._auth(array['boss', 'teacher']);
+begin
+  if me.role = 'boss' then
+    return jsonb_build_object(
+      'lessons', coalesce((select jsonb_agg(to_jsonb(l) || jsonb_build_object('criteria', public._criteria_json(l.rubric_version_id),
+          'attempts', (select count(*) from public.calibration_attempts a where a.calibration_lesson_id = l.id))
+        order by l.created_at desc) from public.calibration_lessons l), '[]'::jsonb),
+      'teachers', coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'name', t.full_name, 'status', t.status,
+          'attempts', (select count(*) from public.calibration_attempts a where a.teacher_id = t.id),
+          'latest_accuracy', la.accuracy, 'latest_lesson', la.title, 'latest_at', la.created_at) order by lower(t.full_name))
+        from public.profiles t
+        left join lateral (select a.accuracy, a.created_at, l.title from public.calibration_attempts a
+          join public.calibration_lessons l on l.id = a.calibration_lesson_id
+          where a.teacher_id = t.id order by a.created_at desc limit 1) la on true
+        where t.role = 'teacher'), '[]'::jsonb));
+  end if;
+  -- Teacher: active lessons; the team's bands stay hidden until the teacher has sent their own
+  return jsonb_build_object('lessons', coalesce((select jsonb_agg(jsonb_build_object(
+      'id', l.id, 'title', l.title, 'video_url', l.video_url, 'criteria', public._criteria_json(l.rubric_version_id),
+      'my_latest', case when la.id is null then null else jsonb_build_object('accuracy', la.accuracy, 'bands', la.bands, 'at', la.created_at) end,
+      'reference_bands', case when la.id is null then null else l.reference_bands end) order by l.created_at desc)
+    from public.calibration_lessons l
+    left join lateral (select * from public.calibration_attempts a where a.calibration_lesson_id = l.id and a.teacher_id = me.id
+      order by a.created_at desc limit 1) la on true
+    where l.is_active), '[]'::jsonb));
+end $$;
+
+create or replace function public.teacher_submit_calibration(p_calibration_lesson_id uuid, p_bands jsonb)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me public.profiles := public._auth(array['teacher']); l public.calibration_lessons; k text; v_b int;
+  v_total numeric := 0; v_n int := 0; v_bands jsonb := '{}'::jsonb; v_acc int;
+begin
+  select * into l from public.calibration_lessons where id = p_calibration_lesson_id and is_active;
+  if not found then raise exception 'NOT_FOUND'; end if;
+  for k in select jsonb_object_keys(l.reference_bands) loop
+    if p_bands->>k is null or p_bands->>k = '' then raise exception 'INCOMPLETE_SCORES'; end if;
+    begin v_b := (p_bands->>k)::int; exception when others then raise exception 'INVALID_BAND'; end;
+    if v_b < 1 or v_b > 9 then raise exception 'INVALID_BAND'; end if;
+    v_bands := v_bands || jsonb_build_object(k, v_b);
+    v_total := v_total + abs(v_b - (l.reference_bands->>k)::int);
+    v_n := v_n + 1;
+  end loop;
+  -- 0 bands away on average = 100%, 8 bands away (the biggest gap) = 0%
+  v_acc := round(100 - (v_total / greatest(v_n, 1)) / 8 * 100);
+  insert into public.calibration_attempts (calibration_lesson_id, teacher_id, bands, accuracy) values (l.id, me.id, v_bands, v_acc);
+  return jsonb_build_object('accuracy', v_acc, 'reference_bands', l.reference_bands, 'my_bands', v_bands);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Teacher
+-- ---------------------------------------------------------------------
+
+create or replace function public.teacher_my_work()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me public.profiles := public._auth(array['teacher']);
+begin
+  return jsonb_build_object(
+    'assignments', coalesce((select jsonb_agg(jsonb_build_object(
+        'assignment_id', a.id, 'submitted', a.submitted_at is not null, 'submitted_at', a.submitted_at,
+        'lesson_id', l.id, 'type', l.type, 'scheduled_at', l.scheduled_at, 'group_name', l.group_name, 'topic', l.topic,
+        'status', l.status, 'candidate_name', c.full_name, 'decided', l.status in ('approved', 'declined'))
+        order by l.scheduled_at desc)
+      from public.observer_assignments a join public.trial_lessons l on l.id = a.lesson_id join public.profiles c on c.id = l.candidate_id
+      where a.observer_id = me.id), '[]'::jsonb),
+    'mentees', coalesce((select jsonb_agg(jsonb_build_object('id', p.id, 'name', p.full_name, 'login', p.login, 'stage', p.stage,
+        'journal_count', (select count(*) from public.journal_entries j where j.candidate_id = p.id)) order by lower(p.full_name))
+      from public.profiles p where p.mentor_id = me.id and p.status = 'active'), '[]'::jsonb));
+end $$;
+
+create or replace function public.teacher_get_scoring_form(p_assignment_id uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me public.profiles := public._auth(array['teacher']); a public.observer_assignments; l public.trial_lessons;
+begin
+  select * into a from public.observer_assignments where id = p_assignment_id and observer_id = me.id;
+  if not found then raise exception 'NOT_YOUR_ASSIGNMENT'; end if;
+  select * into l from public.trial_lessons where id = a.lesson_id;
+  return jsonb_build_object(
+    'assignment_id', a.id, 'submitted', a.submitted_at is not null, 'submitted_at', a.submitted_at,
+    'overall_comment', a.overall_comment,
+    'locked', a.submitted_at is not null or l.status in ('approved', 'declined'),
+    'lesson', jsonb_build_object('id', l.id, 'type', l.type, 'scheduled_at', l.scheduled_at, 'group_name', l.group_name, 'topic', l.topic, 'status', l.status),
+    'candidate_name', (select full_name from public.profiles where id = l.candidate_id),
+    'criteria', public._criteria_json(l.rubric_version_id),
+    'my_scores', coalesce((select jsonb_agg(jsonb_build_object('criterion_id', s.criterion_id, 'band', s.band, 'comment', s.comment))
+      from public.scores s where s.assignment_id = a.id), '[]'::jsonb));
+end $$;
+
+create or replace function public.teacher_submit_scores(p_assignment_id uuid, p_scores jsonb, p_overall_comment text default '')
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me public.profiles := public._auth(array['teacher']); a public.observer_assignments; l public.trial_lessons;
+  x jsonb; v_b int; v_needed uuid[]; v_sent uuid[] := '{}'; v_count int;
+begin
+  select * into a from public.observer_assignments where id = p_assignment_id for update;
+  if not found or a.observer_id <> me.id then raise exception 'NOT_YOUR_ASSIGNMENT'; end if;
+  if a.submitted_at is not null then raise exception 'ALREADY_SUBMITTED'; end if;
+  select * into l from public.trial_lessons where id = a.lesson_id;
+  if l.status in ('approved', 'declined') then raise exception 'ALREADY_DECIDED'; end if;
+  if jsonb_typeof(p_scores) <> 'array' then raise exception 'INCOMPLETE_SCORES'; end if;
+  for x in select * from jsonb_array_elements(p_scores) loop
+    begin v_b := (x->>'band')::int; exception when others then raise exception 'INVALID_BAND'; end;
+    if v_b is null or v_b < 1 or v_b > 9 or (x->>'band')::numeric <> v_b then raise exception 'INVALID_BAND'; end if;
+    v_sent := v_sent || (x->>'criterion_id')::uuid;
+  end loop;
+  select array_agg(id) into v_needed from public.criteria where rubric_version_id = l.rubric_version_id;
+  if cardinality(v_sent) <> cardinality(v_needed)
+     or (select count(distinct s) from unnest(v_sent) s) <> cardinality(v_needed)
+     or not (v_sent @> v_needed) then raise exception 'INCOMPLETE_SCORES'; end if;
+
+  delete from public.scores where assignment_id = a.id;
+  insert into public.scores (assignment_id, criterion_id, band, comment)
+  select a.id, (e->>'criterion_id')::uuid, (e->>'band')::int, nullif(trim(coalesce(e->>'comment', '')), '')
+  from jsonb_array_elements(p_scores) e;
+  update public.observer_assignments set submitted_at = now(), overall_comment = nullif(trim(coalesce(p_overall_comment, '')), '')
+  where id = a.id;
+  perform public._refresh_lesson_status(l.id);
+  select count(*) into v_count from public.observer_assignments where lesson_id = l.id and submitted_at is not null;
+  return jsonb_build_object('ok', true, 'submitted_count', v_count);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Candidate and journal
+-- ---------------------------------------------------------------------
+
+create or replace function public.candidate_my_results()
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me public.profiles := public._auth(array['candidate']);
+begin
+  return jsonb_build_object('name', me.full_name, 'stage', me.stage, 'lessons', coalesce((select jsonb_agg(
+    jsonb_build_object('lesson_id', l.id, 'type', l.type, 'scheduled_at', l.scheduled_at, 'group_name', l.group_name, 'topic', l.topic,
+      'status', case d.outcome when 'approved' then 'Approved' when 'declined' then 'Declined' else 'Waiting' end)
+    -- Bands, comments and the boss's note only after the decision; never who wrote what
+    || case when d.id is null then '{}'::jsonb else jsonb_build_object(
+      'overall', d.overall_band, 'boss_note', d.note, 'decided_at', d.created_at,
+      'criteria', (select coalesce(jsonb_agg(jsonb_build_object('name', c.name, 'area', c.area,
+          'band', (select round(avg(s.band)::numeric, 1) from public.scores s join public.observer_assignments a on a.id = s.assignment_id
+                   where a.lesson_id = l.id and a.submitted_at is not null and s.criterion_id = c.id)) order by c.sort_order), '[]'::jsonb)
+        from public.criteria c where c.rubric_version_id = l.rubric_version_id),
+      'comments', coalesce((select jsonb_agg(x) from (
+          select jsonb_build_object('criterion', null, 'comment', a.overall_comment) x from public.observer_assignments a
+            where a.lesson_id = l.id and a.submitted_at is not null and a.overall_comment is not null
+          union all
+          select jsonb_build_object('criterion', c.name, 'comment', s.comment) from public.scores s
+            join public.observer_assignments a on a.id = s.assignment_id join public.criteria c on c.id = s.criterion_id
+            where a.lesson_id = l.id and a.submitted_at is not null and s.comment is not null) q), '[]'::jsonb)) end
+    order by l.scheduled_at desc)
+    from public.trial_lessons l left join public.decisions d on d.lesson_id = l.id where l.candidate_id = me.id), '[]'::jsonb));
+end $$;
+
+create or replace function public.candidate_add_journal(p_lesson_date text, p_observed_teacher text, p_group_name text,
+  p_techniques text, p_will_use text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare me public.profiles := public._auth(array['candidate']); v_date date; j public.journal_entries;
+begin
+  if trim(coalesce(p_lesson_date, '')) = '' or trim(coalesce(p_observed_teacher, '')) = ''
+     or trim(coalesce(p_techniques, '')) = '' or trim(coalesce(p_will_use, '')) = '' then raise exception 'JOURNAL_FIELDS_REQUIRED'; end if;
+  begin v_date := trim(p_lesson_date)::date; exception when others then raise exception 'INVALID_DATE'; end;
+  insert into public.journal_entries (candidate_id, lesson_date, observed_teacher, group_name, techniques, will_use)
+  values (me.id, v_date, trim(p_observed_teacher), nullif(trim(coalesce(p_group_name, '')), ''), trim(p_techniques), trim(p_will_use))
+  returning * into j;
+  return to_jsonb(j);
+end $$;
+
+-- Boss: any candidate. Teacher: own mentees. Candidate: always their own journal.
+create or replace function public.journal_list(p_candidate_id uuid default null)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare me public.profiles := public._auth(array['boss', 'teacher', 'candidate']); v_target uuid;
+begin
+  if me.role = 'candidate' then v_target := me.id;
+  else
+    v_target := p_candidate_id;
+    if me.role = 'teacher' and not exists (select 1 from public.profiles where id = v_target and mentor_id = me.id) then
+      raise exception 'NOT_YOUR_MENTEE'; end if;
+  end if;
+  return coalesce((select jsonb_agg(to_jsonb(j) order by j.lesson_date desc, j.created_at desc)
+    from public.journal_entries j where j.candidate_id = v_target), '[]'::jsonb);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- First creator account (run once from the SQL editor, see README)
+-- ---------------------------------------------------------------------
+create or replace function public.setup_first_creator(p_full_name text, p_login text, p_password text)
+returns text language plpgsql security definer set search_path = public as $$
+declare p public.profiles;
+begin
+  if exists (select 1 from public.profiles where role = 'creator') then raise exception 'A creator account already exists'; end if;
+  p := public._create_user(p_full_name, p_login, p_password, 'creator', 'active', '', null);
+  return 'Creator account created: ' || p.login;
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Storage for material files
+-- ---------------------------------------------------------------------
+insert into storage.buckets (id, name, public) values ('materials', 'materials', true) on conflict (id) do nothing;
+
+create or replace function public.is_boss()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'boss' and status = 'active');
+$$;
+
+drop policy if exists "Boss uploads materials" on storage.objects;
+create policy "Boss uploads materials" on storage.objects for insert to authenticated
+  with check (bucket_id = 'materials' and public.is_boss());
+drop policy if exists "Boss updates materials" on storage.objects;
+create policy "Boss updates materials" on storage.objects for update to authenticated
+  using (bucket_id = 'materials' and public.is_boss());
+drop policy if exists "Boss deletes materials" on storage.objects;
+create policy "Boss deletes materials" on storage.objects for delete to authenticated
+  using (bucket_id = 'materials' and public.is_boss());
+
+-- ---------------------------------------------------------------------
+-- Who may call what: only signed-in users, and only the public functions
+-- ---------------------------------------------------------------------
+do $$
+declare f record;
+begin
+  for f in select p.oid::regprocedure as sig, p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.prokind = 'f' loop
+    execute format('revoke all on function %s from public', f.sig);
+    begin execute format('revoke all on function %s from anon', f.sig); exception when undefined_object then null; end;
+    begin execute format('revoke all on function %s from authenticated', f.sig); exception when undefined_object then null; end;
+    if f.proname not like '\_%' and f.proname <> 'setup_first_creator' then
+      begin execute format('grant execute on function %s to authenticated', f.sig); exception when undefined_object then null; end;
+    end if;
+  end loop;
+end $$;
+-- The storage policy helper must stay callable for signed-in users
+grant execute on function public.is_boss() to authenticated;
+-- Helpers used inside the functions run as the function owner, so they need no grants.

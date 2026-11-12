@@ -222,3 +222,11 @@ Workflows (folder Candidate/): functions "Candidate: load my results" `c0a1b2c3-
 - Creator "Save account" (`c0a1b2c3-0040`): when the error code is unknown, the message now adds the server's own words ("Details: …") so live-only failures can be diagnosed; the toast is cleared at the start of each save.
 - The same account values that failed on the live site (teacher, login `TOXIRJON`, 8-digit password) create fine in the editor backend; cause still open.
 - "Made with WeWeb" badge: controlled by the WeWeb plan, not by the project; it cannot be hidden from the app.
+
+## Move to GitHub Pages + Supabase (12 Nov 2026)
+
+The owner decided to stop using WeWeb. The app is rebuilt as a static site in this repository (GitHub Pages from `main`) with Supabase for logins and data.
+- `supabase/schema.sql`: same tables, rules and error codes as the WeWeb backend; every action is a role-checked `security definer` function, tables have RLS with no open policies, accounts are created in `auth.users` by the creator (login → `login@users.edunest.local`), blocked accounts are banned in auth.
+- `app/`: Preact + htm without a build step, hash routes (`#/boss/lessons`), same pages and design system as the WeWeb version.
+- Tests: `supabase/test/run_tests.sh` (92 database checks on local Postgres with Supabase stand-ins) and `supabase/test/e2e.cjs` (browser run of the whole flow against the real SQL through `local_api.cjs`, screenshots at 1280 and 375 px, no sideways scrolling).
+- The WeWeb project stays until the owner confirms the new version works, then it is deleted.
